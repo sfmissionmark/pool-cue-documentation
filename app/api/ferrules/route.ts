@@ -17,8 +17,18 @@ export interface FerruleSpec {
   updatedAt: Date;
 }
 
+// Check if database is available
+function isDatabaseAvailable() {
+  return process.env.POSTGRES_URL || process.env.POSTGRES_PRISMA_URL;
+}
+
 // Initialize database table
 async function initDatabase() {
+  if (!isDatabaseAvailable()) {
+    console.log('Database not available, skipping initialization');
+    return false;
+  }
+  
   try {
     await sql`
       CREATE TABLE IF NOT EXISTS ferrule_specs (
@@ -37,15 +47,22 @@ async function initDatabase() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `;
+    return true;
   } catch (error) {
     console.error('Database initialization error:', error);
+    return false;
   }
 }
 
 // GET - Fetch all ferrule specs
 export async function GET() {
   try {
-    await initDatabase();
+    const dbAvailable = await initDatabase();
+    
+    if (!dbAvailable) {
+      // Return empty array if database not available
+      return NextResponse.json([]);
+    }
     
     const { rows } = await sql`
       SELECT * FROM ferrule_specs 
@@ -71,14 +88,19 @@ export async function GET() {
     return NextResponse.json(ferrules);
   } catch (error) {
     console.error('GET Error:', error);
-    return NextResponse.json({ error: 'Failed to fetch ferrules' }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ error: 'Failed to fetch ferrules', details: errorMessage }, { status: 500 });
   }
 }
 
 // POST - Create new ferrule spec
 export async function POST(request: NextRequest) {
   try {
-    await initDatabase();
+    const dbAvailable = await initDatabase();
+    
+    if (!dbAvailable) {
+      return NextResponse.json({ error: 'Database not available. Please set up Vercel Postgres first.' }, { status: 503 });
+    }
     
     const body = await request.json();
     const {
@@ -110,13 +132,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, id });
   } catch (error) {
     console.error('POST Error:', error);
-    return NextResponse.json({ error: 'Failed to create ferrule' }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ error: 'Failed to create ferrule', details: errorMessage }, { status: 500 });
   }
 }
 
 // PUT - Update existing ferrule spec
 export async function PUT(request: NextRequest) {
   try {
+    const dbAvailable = isDatabaseAvailable();
+    
+    if (!dbAvailable) {
+      return NextResponse.json({ error: 'Database not available. Please set up Vercel Postgres first.' }, { status: 503 });
+    }
+    
     const body = await request.json();
     const {
       id,
@@ -151,13 +180,20 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ success: true, id });
   } catch (error) {
     console.error('PUT Error:', error);
-    return NextResponse.json({ error: 'Failed to update ferrule' }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ error: 'Failed to update ferrule', details: errorMessage }, { status: 500 });
   }
 }
 
 // DELETE - Delete ferrule spec
 export async function DELETE(request: NextRequest) {
   try {
+    const dbAvailable = isDatabaseAvailable();
+    
+    if (!dbAvailable) {
+      return NextResponse.json({ error: 'Database not available. Please set up Vercel Postgres first.' }, { status: 503 });
+    }
+    
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
@@ -170,6 +206,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true, id });
   } catch (error) {
     console.error('DELETE Error:', error);
-    return NextResponse.json({ error: 'Failed to delete ferrule' }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ error: 'Failed to delete ferrule', details: errorMessage }, { status: 500 });
   }
 }

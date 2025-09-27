@@ -20,6 +20,8 @@ interface FerruleSpec {
 export default function FerrulesPage() {
   const [specs, setSpecs] = useState<FerruleSpec[]>([]);
   const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [currentSpec, setCurrentSpec] = useState<FerruleSpec>({
     id: '',
     name: '',
@@ -34,42 +36,120 @@ export default function FerrulesPage() {
     vaultPlateThickness: ''
   });
 
-  // Load from localStorage on component mount
+  // Fetch ferrules from database on component mount
   useEffect(() => {
-    const savedSpecs = localStorage.getItem('ferrule-specs');
-    if (savedSpecs) {
-      setSpecs(JSON.parse(savedSpecs));
-    }
+    fetchFerrules();
   }, []);
 
-  // Save to localStorage whenever specs change
-  useEffect(() => {
-    if (specs.length > 0) {
-      localStorage.setItem('ferrule-specs', JSON.stringify(specs));
+  const fetchFerrules = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/ferrules');
+      if (response.ok) {
+        const data = await response.json();
+        setSpecs(data);
+      } else if (response.status === 503) {
+        // Database not available, try localStorage
+        console.log('Database not available, loading from localStorage');
+        const savedSpecs = localStorage.getItem('ferrule-specs');
+        setSpecs(savedSpecs ? JSON.parse(savedSpecs) : []);
+      } else {
+        console.error('Failed to fetch ferrules');
+      }
+    } catch (error) {
+      console.error('Error fetching ferrules:', error);
+      // Fallback to localStorage
+      const savedSpecs = localStorage.getItem('ferrule-specs');
+      setSpecs(savedSpecs ? JSON.parse(savedSpecs) : []);
+    } finally {
+      setLoading(false);
     }
-  }, [specs]);
+  };
 
-  const handleSave = () => {
-    if (currentSpec.id) {
-      setSpecs(prev => prev.map(spec => spec.id === currentSpec.id ? currentSpec : spec));
-    } else {
-      const newSpec = { ...currentSpec, id: Date.now().toString() };
-      setSpecs(prev => [...prev, newSpec]);
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      
+      if (currentSpec.id) {
+        // Update existing ferrule
+        const response = await fetch('/api/ferrules', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(currentSpec)
+        });
+        
+        if (!response.ok) throw new Error('Failed to update ferrule');
+      } else {
+        // Create new ferrule
+        const newSpec = { ...currentSpec, id: Date.now().toString() };
+        const response = await fetch('/api/ferrules', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newSpec)
+        });
+        
+        if (!response.ok) throw new Error('Failed to create ferrule');
+      }
+      
+      // Refresh the list
+      await fetchFerrules();
+      
+      // Reset form
+      setIsEditing(false);
+      setCurrentSpec({
+        id: '',
+        name: '',
+        diameter: '',
+        length: '',
+        material: '',
+        buildStyle: '',
+        machiningSteps: [''],
+        assemblyNotes: '',
+        vaultPlate: false,
+        vaultPlateMaterial: '',
+        vaultPlateThickness: ''
+      });
+    } catch (error) {
+      console.error('Error saving ferrule:', error);
+      
+      // Check if it's a database unavailable error
+      if (error instanceof Error && error.message.includes('Database not available')) {
+        alert('Database is not set up yet. Please:\n\n1. Go to your Vercel dashboard\n2. Click on your project\n3. Go to Storage tab\n4. Create a Postgres database\n\nFor now, your data will be temporarily saved in your browser.');
+        
+        // Fallback to localStorage for now
+        const savedSpecs = localStorage.getItem('ferrule-specs');
+        let specs = savedSpecs ? JSON.parse(savedSpecs) : [];
+        
+        if (currentSpec.id) {
+          specs = specs.map((spec: FerruleSpec) => spec.id === currentSpec.id ? currentSpec : spec);
+        } else {
+          const newSpec = { ...currentSpec, id: Date.now().toString() };
+          specs.push(newSpec);
+        }
+        
+        localStorage.setItem('ferrule-specs', JSON.stringify(specs));
+        await fetchFerrules(); // This will now load from localStorage
+        
+        setIsEditing(false);
+        setCurrentSpec({
+          id: '',
+          name: '',
+          diameter: '',
+          length: '',
+          material: '',
+          buildStyle: '',
+          machiningSteps: [''],
+          assemblyNotes: '',
+          vaultPlate: false,
+          vaultPlateMaterial: '',
+          vaultPlateThickness: ''
+        });
+      } else {
+        alert('Failed to save ferrule. Please try again.');
+      }
+    } finally {
+      setSaving(false);
     }
-    setIsEditing(false);
-    setCurrentSpec({
-      id: '',
-      name: '',
-      diameter: '',
-      length: '',
-      material: '',
-      buildStyle: '',
-      machiningSteps: [''],
-      assemblyNotes: '',
-      vaultPlate: false,
-      vaultPlateMaterial: '',
-      vaultPlateThickness: ''
-    });
   };
 
   const handleEdit = (spec: FerruleSpec) => {
@@ -77,9 +157,24 @@ export default function FerrulesPage() {
     setIsEditing(true);
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('Are you sure you want to delete this ferrule specification?')) {
-      setSpecs(prev => prev.filter(spec => spec.id !== id));
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this ferrule specification?')) {
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/api/ferrules?id=${id}`, {
+        method: 'DELETE'
+      });
+      
+      if (response.ok) {
+        await fetchFerrules();
+      } else {
+        throw new Error('Failed to delete ferrule');
+      }
+    } catch (error) {
+      console.error('Error deleting ferrule:', error);
+      alert('Failed to delete ferrule. Please try again.');
     }
   };
 
@@ -120,11 +215,6 @@ export default function FerrulesPage() {
           <p className="text-slate-600 dark:text-slate-400">
             Document ferrule specifications, materials, and assembly processes
           </p>
-          <div className="mt-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-            <p className="text-sm text-yellow-800 dark:text-yellow-200">
-              💾 Currently saving to browser storage. Data will persist until you clear browser data.
-            </p>
-          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -292,9 +382,10 @@ export default function FerrulesPage() {
               <div className="flex gap-3">
                 <button
                   onClick={handleSave}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                  disabled={saving}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isEditing ? 'Update' : 'Save'} Ferrule
+                  {saving ? 'Saving...' : (isEditing ? 'Update' : 'Save')} Ferrule
                 </button>
                 {isEditing && (
                   <button
@@ -329,7 +420,11 @@ export default function FerrulesPage() {
               Saved Ferrule Specifications
             </h2>
             
-            {specs.length === 0 ? (
+            {loading ? (
+              <p className="text-slate-500 dark:text-slate-400 text-center py-8">
+                Loading ferrule specifications...
+              </p>
+            ) : specs.length === 0 ? (
               <p className="text-slate-500 dark:text-slate-400 text-center py-8">
                 No ferrule specifications saved yet. Add one using the form on the left.
               </p>
