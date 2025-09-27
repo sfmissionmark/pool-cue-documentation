@@ -1,7 +1,7 @@
 'use client';
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface FerruleSpec {
   id: string;
@@ -20,6 +20,8 @@ interface FerruleSpec {
 export default function FerrulesPage() {
   const [specs, setSpecs] = useState<FerruleSpec[]>([]);
   const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [currentSpec, setCurrentSpec] = useState<FerruleSpec>({
     id: '',
     name: '',
@@ -34,32 +36,103 @@ export default function FerrulesPage() {
     vaultPlateThickness: ''
   });
 
-  const handleSave = () => {
-    if (currentSpec.id) {
-      setSpecs(prev => prev.map(spec => spec.id === currentSpec.id ? currentSpec : spec));
-    } else {
-      const newSpec = { ...currentSpec, id: Date.now().toString() };
-      setSpecs(prev => [...prev, newSpec]);
+  // Fetch ferrules from database on component mount
+  useEffect(() => {
+    fetchFerrules();
+  }, []);
+
+  const fetchFerrules = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/ferrules');
+      if (response.ok) {
+        const data = await response.json();
+        setSpecs(data);
+      } else {
+        console.error('Failed to fetch ferrules');
+      }
+    } catch (error) {
+      console.error('Error fetching ferrules:', error);
+    } finally {
+      setLoading(false);
     }
-    setIsEditing(false);
-    setCurrentSpec({
-      id: '',
-      name: '',
-      diameter: '',
-      length: '',
-      material: '',
-      buildStyle: '',
-      machiningSteps: [''],
-      assemblyNotes: '',
-      vaultPlate: false,
-      vaultPlateMaterial: '',
-      vaultPlateThickness: ''
-    });
+  };
+
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      
+      if (currentSpec.id) {
+        // Update existing ferrule
+        const response = await fetch('/api/ferrules', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(currentSpec)
+        });
+        
+        if (!response.ok) throw new Error('Failed to update ferrule');
+      } else {
+        // Create new ferrule
+        const newSpec = { ...currentSpec, id: Date.now().toString() };
+        const response = await fetch('/api/ferrules', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newSpec)
+        });
+        
+        if (!response.ok) throw new Error('Failed to create ferrule');
+      }
+      
+      // Refresh the list
+      await fetchFerrules();
+      
+      // Reset form
+      setIsEditing(false);
+      setCurrentSpec({
+        id: '',
+        name: '',
+        diameter: '',
+        length: '',
+        material: '',
+        buildStyle: '',
+        machiningSteps: [''],
+        assemblyNotes: '',
+        vaultPlate: false,
+        vaultPlateMaterial: '',
+        vaultPlateThickness: ''
+      });
+    } catch (error) {
+      console.error('Error saving ferrule:', error);
+      alert('Failed to save ferrule. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleEdit = (spec: FerruleSpec) => {
     setCurrentSpec(spec);
     setIsEditing(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this ferrule specification?')) {
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/api/ferrules?id=${id}`, {
+        method: 'DELETE'
+      });
+      
+      if (response.ok) {
+        await fetchFerrules();
+      } else {
+        throw new Error('Failed to delete ferrule');
+      }
+    } catch (error) {
+      console.error('Error deleting ferrule:', error);
+      alert('Failed to delete ferrule. Please try again.');
+    }
   };
 
   const addMachiningStep = () => {
@@ -266,9 +339,10 @@ export default function FerrulesPage() {
               <div className="flex gap-3">
                 <button
                   onClick={handleSave}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                  disabled={saving}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isEditing ? 'Update' : 'Save'} Ferrule
+                  {saving ? 'Saving...' : (isEditing ? 'Update' : 'Save')} Ferrule
                 </button>
                 {isEditing && (
                   <button
@@ -303,7 +377,11 @@ export default function FerrulesPage() {
               Saved Ferrule Specifications
             </h2>
             
-            {specs.length === 0 ? (
+            {loading ? (
+              <p className="text-slate-500 dark:text-slate-400 text-center py-8">
+                Loading ferrule specifications...
+              </p>
+            ) : specs.length === 0 ? (
               <p className="text-slate-500 dark:text-slate-400 text-center py-8">
                 No ferrule specifications saved yet. Add one using the form on the left.
               </p>
@@ -318,12 +396,20 @@ export default function FerrulesPage() {
                       <h3 className="font-semibold text-slate-900 dark:text-slate-100">
                         {spec.name}
                       </h3>
-                      <button
-                        onClick={() => handleEdit(spec)}
-                        className="text-blue-600 dark:text-blue-400 hover:underline text-sm"
-                      >
-                        Edit
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleEdit(spec)}
+                          className="text-blue-600 dark:text-blue-400 hover:underline text-sm"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(spec.id)}
+                          className="text-red-600 dark:text-red-400 hover:underline text-sm"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-sm text-slate-600 dark:text-slate-400 mb-3">
                       <div><strong>Diameter:</strong> {spec.diameter}</div>
