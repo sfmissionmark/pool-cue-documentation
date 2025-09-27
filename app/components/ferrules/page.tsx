@@ -36,6 +36,7 @@ export default function FerrulesPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [databaseError, setDatabaseError] = useState<string | null>(null);
 
   // Fetch ferrules from database on component mount
   useEffect(() => {
@@ -45,15 +46,25 @@ export default function FerrulesPage() {
   const fetchFerrules = async () => {
     try {
       setLoading(true);
+      setDatabaseError(null);
       const response = await fetch('/api/ferrules');
       if (response.ok) {
         const data = await response.json();
         setSpecs(data);
+      } else if (response.status === 503) {
+        const errorData = await response.json();
+        setDatabaseError(errorData.error);
+        // Fallback to localStorage if database not configured
+        const savedSpecs = localStorage.getItem('ferrule-specs');
+        setSpecs(savedSpecs ? JSON.parse(savedSpecs) : []);
       } else {
         console.error('Failed to fetch ferrules');
       }
     } catch (error) {
       console.error('Error fetching ferrules:', error);
+      // Fallback to localStorage on error
+      const savedSpecs = localStorage.getItem('ferrule-specs');
+      setSpecs(savedSpecs ? JSON.parse(savedSpecs) : []);
     } finally {
       setLoading(false);
     }
@@ -71,7 +82,13 @@ export default function FerrulesPage() {
           body: JSON.stringify(currentSpec)
         });
         
-        if (!response.ok) throw new Error('Failed to update ferrule');
+        if (response.status === 503) {
+          // Database not configured, use localStorage
+          setSpecs(prev => prev.map(spec => spec.id === currentSpec.id ? currentSpec : spec));
+          localStorage.setItem('ferrule-specs', JSON.stringify(specs.map(spec => spec.id === currentSpec.id ? currentSpec : spec)));
+        } else if (!response.ok) {
+          throw new Error('Failed to update ferrule');
+        }
       } else {
         // Create new ferrule
         const newSpec = { ...currentSpec, id: Date.now().toString() };
@@ -81,11 +98,19 @@ export default function FerrulesPage() {
           body: JSON.stringify(newSpec)
         });
         
-        if (!response.ok) throw new Error('Failed to create ferrule');
+        if (response.status === 503) {
+          // Database not configured, use localStorage
+          setSpecs(prev => [...prev, newSpec]);
+          localStorage.setItem('ferrule-specs', JSON.stringify([...specs, newSpec]));
+        } else if (!response.ok) {
+          throw new Error('Failed to create ferrule');
+        }
       }
       
-      // Refresh the list
-      await fetchFerrules();
+      // Refresh the list if database worked
+      if (!databaseError) {
+        await fetchFerrules();
+      }
       
       // Reset form
       setIsEditing(false);
@@ -104,7 +129,7 @@ export default function FerrulesPage() {
       });
     } catch (error) {
       console.error('Error saving ferrule:', error);
-      alert('Failed to save ferrule. Please check your database connection.');
+      alert('Failed to save ferrule. Check your database configuration.');
     } finally {
       setSaving(false);
     }
@@ -125,7 +150,12 @@ export default function FerrulesPage() {
         method: 'DELETE'
       });
       
-      if (response.ok) {
+      if (response.status === 503) {
+        // Database not configured, use localStorage
+        const newSpecs = specs.filter(spec => spec.id !== id);
+        setSpecs(newSpecs);
+        localStorage.setItem('ferrule-specs', JSON.stringify(newSpecs));
+      } else if (response.ok) {
         await fetchFerrules();
       } else {
         throw new Error('Failed to delete ferrule');
@@ -173,11 +203,19 @@ export default function FerrulesPage() {
           <p className="text-slate-600 dark:text-slate-400">
             Document ferrule specifications, materials, and assembly processes
           </p>
-          <div className="mt-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-            <p className="text-sm text-green-800 dark:text-green-200">
-              �️ Data is saved to the cloud database. Your specifications are persistent and secure.
-            </p>
-          </div>
+          {databaseError ? (
+            <div className="mt-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+              <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                💾 Database not configured - using browser storage. See <code>DATABASE_SETUP.md</code> for cloud setup.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+              <p className="text-sm text-green-800 dark:text-green-200">
+                🗄️ Data saved to cloud database. Your specifications are persistent and secure.
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

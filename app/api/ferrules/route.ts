@@ -20,6 +20,11 @@ export interface FerruleSpec {
 // GET - Fetch all ferrule specs
 export async function GET() {
   try {
+    // Check if Supabase is configured
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL === 'https://placeholder.supabase.co') {
+      return NextResponse.json({ error: 'Database not configured. Please set up Supabase credentials.' }, { status: 503 });
+    }
+
     const { data, error } = await supabase
       .from('ferrule_specs')
       .select('*')
@@ -58,6 +63,11 @@ export async function GET() {
 // POST - Create new ferrule spec
 export async function POST(request: NextRequest) {
   try {
+    // Check if Supabase is configured
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL === 'https://placeholder.supabase.co') {
+      return NextResponse.json({ error: 'Database not configured. Please set up Supabase credentials.' }, { status: 503 });
+    }
+
     const body = await request.json();
     const {
       id,
@@ -107,6 +117,11 @@ export async function POST(request: NextRequest) {
 // PUT - Update existing ferrule spec
 export async function PUT(request: NextRequest) {
   try {
+    // Check if Supabase is configured
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL === 'https://placeholder.supabase.co') {
+      return NextResponse.json({ error: 'Database not configured. Please set up Supabase credentials.' }, { status: 503 });
+    }
+
     const body = await request.json();
     const {
       id,
@@ -157,6 +172,11 @@ export async function PUT(request: NextRequest) {
 // DELETE - Delete ferrule spec
 export async function DELETE(request: NextRequest) {
   try {
+    // Check if Supabase is configured
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL === 'https://placeholder.supabase.co') {
+      return NextResponse.json({ error: 'Database not configured. Please set up Supabase credentials.' }, { status: 503 });
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
