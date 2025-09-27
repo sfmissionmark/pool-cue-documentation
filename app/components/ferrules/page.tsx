@@ -50,21 +50,32 @@ export default function FerrulesPage() {
       const response = await fetch('/api/ferrules');
       if (response.ok) {
         const data = await response.json();
-        setSpecs(data);
-      } else if (response.status === 503) {
-        const errorData = await response.json();
-        setDatabaseError(errorData.error);
-        // Fallback to localStorage if database not configured
-        const savedSpecs = localStorage.getItem('ferrule-specs');
-        setSpecs(savedSpecs ? JSON.parse(savedSpecs) : []);
+        // If we get empty array and no database, load from localStorage
+        if (Array.isArray(data) && data.length === 0) {
+          const savedSpecs = localStorage.getItem('ferrule-specs');
+          if (savedSpecs) {
+            const parsedSpecs = JSON.parse(savedSpecs);
+            setSpecs(parsedSpecs);
+            setDatabaseError('Firebase not configured - using browser storage');
+          } else {
+            setSpecs([]);
+          }
+        } else {
+          setSpecs(data);
+        }
       } else {
         console.error('Failed to fetch ferrules');
+        // Fallback to localStorage on any error
+        const savedSpecs = localStorage.getItem('ferrule-specs');
+        setSpecs(savedSpecs ? JSON.parse(savedSpecs) : []);
+        setDatabaseError('Firebase not configured - using browser storage');
       }
     } catch (error) {
       console.error('Error fetching ferrules:', error);
       // Fallback to localStorage on error
       const savedSpecs = localStorage.getItem('ferrule-specs');
       setSpecs(savedSpecs ? JSON.parse(savedSpecs) : []);
+      setDatabaseError('Firebase not configured - using browser storage');
     } finally {
       setLoading(false);
     }
@@ -82,11 +93,18 @@ export default function FerrulesPage() {
           body: JSON.stringify(currentSpec)
         });
         
-        if (response.status === 503) {
-          // Database not configured, use localStorage
-          setSpecs(prev => prev.map(spec => spec.id === currentSpec.id ? currentSpec : spec));
-          localStorage.setItem('ferrule-specs', JSON.stringify(specs.map(spec => spec.id === currentSpec.id ? currentSpec : spec)));
-        } else if (!response.ok) {
+        if (response.ok) {
+          const result = await response.json();
+          if (result.localStorage) {
+            // Use localStorage
+            const updatedSpecs = specs.map(spec => spec.id === currentSpec.id ? currentSpec : spec);
+            setSpecs(updatedSpecs);
+            localStorage.setItem('ferrule-specs', JSON.stringify(updatedSpecs));
+          } else {
+            // Database worked, refresh from server
+            await fetchFerrules();
+          }
+        } else {
           throw new Error('Failed to update ferrule');
         }
       } else {
@@ -98,18 +116,20 @@ export default function FerrulesPage() {
           body: JSON.stringify(newSpec)
         });
         
-        if (response.status === 503) {
-          // Database not configured, use localStorage
-          setSpecs(prev => [...prev, newSpec]);
-          localStorage.setItem('ferrule-specs', JSON.stringify([...specs, newSpec]));
-        } else if (!response.ok) {
+        if (response.ok) {
+          const result = await response.json();
+          if (result.localStorage) {
+            // Use localStorage
+            const updatedSpecs = [...specs, newSpec];
+            setSpecs(updatedSpecs);
+            localStorage.setItem('ferrule-specs', JSON.stringify(updatedSpecs));
+          } else {
+            // Database worked, refresh from server
+            await fetchFerrules();
+          }
+        } else {
           throw new Error('Failed to create ferrule');
         }
-      }
-      
-      // Refresh the list if database worked
-      if (!databaseError) {
-        await fetchFerrules();
       }
       
       // Reset form
@@ -150,13 +170,17 @@ export default function FerrulesPage() {
         method: 'DELETE'
       });
       
-      if (response.status === 503) {
-        // Database not configured, use localStorage
-        const newSpecs = specs.filter(spec => spec.id !== id);
-        setSpecs(newSpecs);
-        localStorage.setItem('ferrule-specs', JSON.stringify(newSpecs));
-      } else if (response.ok) {
-        await fetchFerrules();
+      if (response.ok) {
+        const result = await response.json();
+        if (result.localStorage) {
+          // Use localStorage
+          const newSpecs = specs.filter(spec => spec.id !== id);
+          setSpecs(newSpecs);
+          localStorage.setItem('ferrule-specs', JSON.stringify(newSpecs));
+        } else {
+          // Database worked, refresh from server
+          await fetchFerrules();
+        }
       } else {
         throw new Error('Failed to delete ferrule');
       }
@@ -206,7 +230,7 @@ export default function FerrulesPage() {
           {databaseError ? (
             <div className="mt-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
               <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                💾 Database not configured - using browser storage. See <code>DATABASE_SETUP.md</code> for cloud setup.
+                � Firebase not configured - using browser storage. See <code>FIREBASE_SETUP.md</code> for Firebase setup.
               </p>
             </div>
           ) : (

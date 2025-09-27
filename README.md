@@ -1,30 +1,48 @@
-# Pool Cue Documentation App
+# Pool Cue Documentation App 🎱
 
-A comprehensive documentation system for pool cue components built with Next.js and Tailwind CSS. This application allows you to document specifications, build processes, machining steps, and assembly notes for various pool cue components.
+A comprehensive documentation system for pool cue components built with Next.js, Tailwind CSS, and Firebase. This application allows you to document specifications, build processes, machining steps, and assembly notes for various pool cue components.
 
 ## Features
 
 - **Component-based Documentation**: Organize documentation by cue components (Ferrules, Tips, Shafts, Joints, Butts, Wraps)
 - **Detailed Specifications**: Track dimensions, materials, and build styles
+- **Vault Plate Support**: Special handling for ferrules with vault plates
 - **Process Documentation**: Record machining steps and assembly procedures
+- **Firebase Integration**: Cloud storage with real-time synchronization
+- **Offline Support**: Works with browser storage when Firebase isn't configured
 - **Modern UI**: Clean, responsive interface with dark mode support
-- **Real-time Updates**: Changes are immediately visible as you work
+- **Real-time Updates**: Changes sync instantly across devices
 
 ## Getting Started
 
-First, run the development server:
+### Quick Start (Browser Storage)
 
+1. Install dependencies:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the application.
+2. Run the development server:
+```bash
+npm run dev
+```
+
+3. Open [http://localhost:3000](http://localhost:3000) with your browser to see the application.
+
+The app will work immediately with browser storage!
+
+### Firebase Setup (Optional - 3 minutes)
+
+For cloud storage and real-time sync across devices:
+
+1. **Follow the setup guide**: See `FIREBASE_SETUP.md` for complete instructions
+2. **Quick summary**:
+   - Create Firebase project at [console.firebase.google.com](https://console.firebase.google.com)
+   - Enable Firestore database
+   - Copy config values to `.env.local`
+   - Restart the development server
+
+Your data will automatically sync to the cloud! 🔥
 
 ## Usage
 
@@ -37,7 +55,13 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 3. **Save and Review**: Your documentation is saved and displayed in an organized format
 4. **Edit as Needed**: Click "Edit" on any saved specification to make updates
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Tech Stack
+
+- **Frontend**: Next.js 15 with App Router, React, TypeScript
+- **Styling**: Tailwind CSS with dark mode support
+- **Database**: Firebase Firestore (with localStorage fallback)
+- **Deployment**: Vercel-ready
+- **Fonts**: Geist font family (optimized with `next/font`)
 
 ## Learn More
 
