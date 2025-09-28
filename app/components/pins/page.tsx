@@ -127,7 +127,158 @@ const TechnicalDrawingModal = ({ spec, isOpen, onClose }: { spec: PinSpec; isOpe
   };
 
   const handlePrint = () => {
-    window.print();
+    // Create a new window for printing
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const maxDiameter = getMaxDiameter();
+    const maxDepth = getMaxDepth();
+    const printScale = 200; // Larger scale for print
+    const printCenterY = 250;
+    const printRightX = 700;
+    const printLeftX = printRightX - (maxDepth * printScale);
+    const profile = generateProfile();
+    const printSvgWidth = Math.max(900, Math.abs(printLeftX - printRightX) + 300);
+    const printSvgHeight = Math.max(500, (maxDiameter * printScale) + 300);
+
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Technical Drawing - ${spec.name}</title>
+          <style>
+            body { 
+              margin: 20px; 
+              font-family: Arial, sans-serif; 
+              background: white;
+            }
+            .print-header {
+              text-align: center;
+              margin-bottom: 20px;
+              border-bottom: 2px solid #000;
+              padding-bottom: 10px;
+            }
+            .print-drawing {
+              text-align: center;
+              margin: 20px 0;
+            }
+            .print-steps {
+              margin-top: 30px;
+            }
+            .step-item {
+              display: flex;
+              align-items: center;
+              gap: 16px;
+              padding: 8px;
+              border: 1px solid #ddd;
+              margin-bottom: 8px;
+              background: #f9f9f9;
+            }
+            .step-number {
+              font-weight: bold;
+              width: 32px;
+            }
+            .step-process {
+              font-weight: bold;
+              min-width: 100px;
+            }
+            @media print {
+              body { margin: 0; }
+              .print-header { page-break-after: avoid; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="print-header">
+            <h1>Technical Drawing</h1>
+            <h2>${spec.name}</h2>
+            <p>Butler Cues - Cue Component Documentation</p>
+          </div>
+          
+          <div class="print-drawing">
+            <svg width="${printSvgWidth}" height="${printSvgHeight}" style="border: 1px solid #ccc;">
+              ${profile.map((segment, index) => {
+                const segmentStartX = printRightX - (segment.startDepth * printScale);
+                const segmentEndX = printRightX - (segment.endDepth * printScale);
+                const innerRadius = segment.radius * printScale;
+                const outerRadius = (segment.outerRadius || maxDiameter / 2) * printScale;
+                
+                let segmentSvg = '';
+                
+                // Top outer profile line
+                segmentSvg += `<line x1="${segmentStartX}" y1="${printCenterY - outerRadius}" x2="${segmentEndX}" y2="${printCenterY - outerRadius}" stroke="#000000" stroke-width="2"/>`;
+                // Bottom outer profile line
+                segmentSvg += `<line x1="${segmentStartX}" y1="${printCenterY + outerRadius}" x2="${segmentEndX}" y2="${printCenterY + outerRadius}" stroke="#000000" stroke-width="2"/>`;
+                
+                // For machined sections, show the inner profile
+                if (segment.type !== 'solid') {
+                  segmentSvg += `<line x1="${segmentStartX}" y1="${printCenterY - innerRadius}" x2="${segmentEndX}" y2="${printCenterY - innerRadius}" stroke="#000000" stroke-width="2"/>`;
+                  segmentSvg += `<line x1="${segmentStartX}" y1="${printCenterY + innerRadius}" x2="${segmentEndX}" y2="${printCenterY + innerRadius}" stroke="#000000" stroke-width="2"/>`;
+                }
+                
+                // Vertical transitions
+                if (index === 0) {
+                  segmentSvg += `<line x1="${printRightX}" y1="${printCenterY - outerRadius}" x2="${printRightX}" y2="${printCenterY - innerRadius}" stroke="#000000" stroke-width="2"/>`;
+                  segmentSvg += `<line x1="${printRightX}" y1="${printCenterY + innerRadius}" x2="${printRightX}" y2="${printCenterY + outerRadius}" stroke="#000000" stroke-width="2"/>`;
+                }
+                
+                if (index < profile.length - 1 && segment.type !== 'solid') {
+                  segmentSvg += `<line x1="${segmentEndX}" y1="${printCenterY - outerRadius}" x2="${segmentEndX}" y2="${printCenterY - innerRadius}" stroke="#000000" stroke-width="2"/>`;
+                  segmentSvg += `<line x1="${segmentEndX}" y1="${printCenterY + innerRadius}" x2="${segmentEndX}" y2="${printCenterY + outerRadius}" stroke="#000000" stroke-width="2"/>`;
+                }
+                
+                return segmentSvg;
+              }).join('')}
+              
+              <!-- Left end cap -->
+              <line x1="${printLeftX}" y1="${printCenterY - (maxDiameter * printScale / 2)}" x2="${printLeftX}" y2="${printCenterY + (maxDiameter * printScale / 2)}" stroke="#000000" stroke-width="2"/>
+              
+              <!-- Center line -->
+              <line x1="${printLeftX - 30}" y1="${printCenterY}" x2="${printRightX + 30}" y2="${printCenterY}" stroke="#000000" stroke-width="0.5" stroke-dasharray="8,8"/>
+              
+              <!-- Zero reference line -->
+              <line x1="${printRightX}" y1="${printCenterY - (maxDiameter * printScale / 2) - 20}" x2="${printRightX}" y2="${printCenterY + (maxDiameter * printScale / 2) + 60}" stroke="#000000" stroke-width="1"/>
+              
+              <!-- Zero label -->
+              <text x="${printRightX + 8}" y="${printCenterY + (maxDiameter * printScale / 2) + 50}" font-size="16" fill="#000000">0</text>
+              
+              <!-- Length dimension -->
+              ${maxDepth > 0 ? `
+                <line x1="${printLeftX}" y1="${printCenterY + (maxDiameter * printScale / 2) + 30}" x2="${printRightX}" y2="${printCenterY + (maxDiameter * printScale / 2) + 30}" stroke="#000000" stroke-width="1"/>
+                <line x1="${printLeftX}" y1="${printCenterY + (maxDiameter * printScale / 2) + 25}" x2="${printLeftX}" y2="${printCenterY + (maxDiameter * printScale / 2) + 35}" stroke="#000000" stroke-width="1"/>
+                <line x1="${printRightX}" y1="${printCenterY + (maxDiameter * printScale / 2) + 25}" x2="${printRightX}" y2="${printCenterY + (maxDiameter * printScale / 2) + 35}" stroke="#000000" stroke-width="1"/>
+                <text x="${(printLeftX + printRightX) / 2}" y="${printCenterY + (maxDiameter * printScale / 2) + 50}" text-anchor="middle" font-size="14" fill="#000000">${maxDepth.toFixed(3)}"</text>
+              ` : ''}
+            </svg>
+          </div>
+          
+          <div class="print-steps">
+            <h3>Machining Steps</h3>
+            ${spec.machiningSteps.length > 0 ? spec.machiningSteps.map((step, index) => `
+              <div class="step-item">
+                <span class="step-number">${index + 1}.</span>
+                <span class="step-process">${step.process}</span>
+                ${step.size ? `<span>⌀${step.size}"</span>` : ''}
+                ${step.depth ? `<span>× ${step.depth}"</span>` : ''}
+                ${step.threadSize ? `<span>Thread: ${step.threadSize}</span>` : ''}
+                ${step.finalDiameter ? `<span>Final ⌀${step.finalDiameter}"</span>` : ''}
+              </div>
+            `).join('') : '<p>No machining steps defined.</p>'}
+          </div>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    
+    // Wait for content to load, then print
+    printWindow.onload = () => {
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 500);
+    };
   };
 
   if (!isOpen) return null;
