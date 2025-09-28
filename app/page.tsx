@@ -9,8 +9,8 @@ const cueComponents = [
   },
   {
     id: "pins",
-    name: "Pins",
-    description: "Document pin specifications, materials, dimensions, and assembly details",
+    name: "Pins", 
+    description: "Document pin build styles, exposed lengths, machining steps, and assembly details",
     icon: "📍"
   }
 ];
@@ -18,17 +18,9 @@ const cueComponents = [
 export default function Home() {
   // Updated with pins support
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-      <div className="container mx-auto px-4 py-8">
-        <header className="text-center mb-12">
-                    <h1 className="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-4">
-            Cue Component Documentation
-          </h1>
-          <p className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
-            Document your cue component specifications including ferrules and pins with detailed dimensions, materials, 
-            machining steps, and assembly notes. All with Firebase cloud storage.
-          </p>
-        </header>
+    <div className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 py-8">
+      <div className="container mx-auto px-4">
+       
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
           {cueComponents.map((component) => (
@@ -53,16 +45,6 @@ export default function Home() {
           ))}
         </div>
 
-        <div className="mt-12 text-center">
-          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 max-w-md mx-auto border border-slate-200 dark:border-slate-700">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
-              Get Started
-            </h3>
-            <p className="text-slate-600 dark:text-slate-400 text-sm">
-              Click on Ferrules above to start documenting sizes, materials, vault plates, machining steps, and assembly notes.
-            </p>
-          </div>
-        </div>
       </div>
     </div>
   );

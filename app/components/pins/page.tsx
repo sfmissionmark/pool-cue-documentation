@@ -5,16 +5,505 @@ import { useState, useEffect } from "react";
 import { getFirestore, isFirebaseConfigured } from '@/lib/firebase';
 import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, query, orderBy, Timestamp } from 'firebase/firestore';
 
+interface MachiningStep {
+  id: string;
+  process: string;
+  size?: string;
+  depth?: string;
+  threadSize?: string;
+  finalDiameter?: string;
+  unit: 'inches' | 'mm';
+}
+
 interface PinSpec {
   id: string;
   name: string;
-  diameter: string;
-  length: string;
-  material: string;
   buildStyle: string;
-  machiningSteps: string[];
+  exposedLength: string;
+  machiningSteps: MachiningStep[];
   assemblyNotes: string;
 }
+
+// Technical Drawing Component
+const TechnicalDrawing = ({ spec }: { spec: PinSpec }) => {
+  const parseValue = (value: string | undefined): number => {
+    if (!value) return 0;
+    // Handle fractions like 1/4, 3/8, etc.
+    if (value.includes('/')) {
+      const [num, den] = value.split('/').map(n => parseFloat(n.trim()));
+      return num / den;
+    }
+    return parseFloat(value) || 0;
+  };
+
+  const getMaxDiameter = () => {
+    let maxDiam = 0.5; // Default diameter
+    spec.machiningSteps.forEach(step => {
+      if (step.process === 'Drill' && step.size) {
+        const diam = parseValue(step.size);
+        if (diam > maxDiam) maxDiam = diam;
+      }
+      if (step.process === 'Bore' && step.finalDiameter) {
+        const diam = parseValue(step.finalDiameter);
+        if (diam > maxDiam) maxDiam = diam;
+      }
+    });
+    return maxDiam;
+  };
+
+  const getMaxDepth = () => {
+    let maxDepth = 1; // Default length
+    spec.machiningSteps.forEach(step => {
+      if (step.process === 'Drill' && step.depth) {
+        const depth = parseValue(step.depth);
+        if (depth > maxDepth) maxDepth = depth;
+      }
+    });
+    if (spec.exposedLength) {
+      const exposed = parseValue(spec.exposedLength);
+      if (exposed > maxDepth) maxDepth = exposed;
+    }
+    return maxDepth;
+  };
+
+  // Create a profile by analyzing all machining operations starting from zero
+  const generateProfile = () => {
+    const maxDiam = getMaxDiameter();
+    const maxDepth = getMaxDepth();
+    const originalRadius = maxDiam / 2;
+    
+    // Sort machining steps by depth (shallowest first, as they would be machined)
+    const sortedSteps = [...spec.machiningSteps]
+      .filter(step => step.depth && step.size && (step.process === 'Drill' || step.process === 'Bore'))
+      .sort((a, b) => parseValue(a.depth || '0') - parseValue(b.depth || '0'));
+    
+    // Create profile segments - start from zero and machine inward
+    const profile = [];
+    let currentDepth = 0;
+    
+    if (sortedSteps.length > 0) {
+      // Process each machining step starting from zero
+      for (let i = 0; i < sortedSteps.length; i++) {
+        const step = sortedSteps[i];
+        const stepDepth = parseValue(step.depth || '0');
+        const stepRadius = parseValue(step.size || '0') / 2;
+        
+        // Add the machined section (from current depth to step depth)
+        profile.push({
+          startDepth: currentDepth,  // Distance from zero
+          endDepth: stepDepth,       // Distance from zero
+          radius: stepRadius,        // Inner radius of machined area
+          type: step.process,
+          outerRadius: originalRadius // Original material radius
+        });
+        
+        currentDepth = stepDepth;
+      }
+      
+      // Add remaining solid section if any
+      if (currentDepth < maxDepth) {
+        profile.push({
+          startDepth: currentDepth,
+          endDepth: maxDepth,
+          radius: originalRadius,
+          type: 'solid',
+          outerRadius: originalRadius
+        });
+      }
+    } else {
+      // No machining operations, just solid body
+      profile.push({
+        startDepth: 0,
+        endDepth: maxDepth,
+        radius: originalRadius,
+        type: 'solid',
+        outerRadius: originalRadius
+      });
+    }
+    
+    return profile;
+  };
+
+  const maxDiameter = getMaxDiameter();
+  const maxDepth = getMaxDepth();
+  const scale = 80; // Scale factor for drawing
+  const centerY = 80;
+  const rightX = 350; // Start from right side (0 position)
+  const leftX = rightX - (maxDepth * scale); // Calculate left position
+  const profile = generateProfile();
+  
+  return (
+    <div className="bg-white rounded-lg p-4 border border-slate-200">
+      <h4 className="text-sm font-medium text-slate-700 mb-3">Technical Drawing (Finished Profile)</h4>
+      <svg width="400" height="180" className="bg-white">
+        
+        {/* Create the subtractive profile - machining from zero (right) inward */}
+        <g>
+          {profile.map((segment, index) => {
+            // Calculate X positions: startDepth and endDepth are distances from zero (rightX)
+            const segmentStartX = rightX - (segment.startDepth * scale); // Starting point from zero
+            const segmentEndX = rightX - (segment.endDepth * scale);     // Ending point from zero
+            const innerRadius = segment.radius * scale;
+            const outerRadius = (segment.outerRadius || maxDiameter / 2) * scale;
+            
+            return (
+              <g key={`segment-${index}`}>
+                {/* Top outer profile line */}
+                <line
+                  x1={segmentStartX}
+                  y1={centerY - outerRadius}
+                  x2={segmentEndX}
+                  y2={centerY - outerRadius}
+                  stroke="#000000"
+                  strokeWidth="2"
+                />
+                {/* Bottom outer profile line */}
+                <line
+                  x1={segmentStartX}
+                  y1={centerY + outerRadius}
+                  x2={segmentEndX}
+                  y2={centerY + outerRadius}
+                  stroke="#000000"
+                  strokeWidth="2"
+                />
+                
+                {/* For machined sections, show the inner profile */}
+                {segment.type !== 'solid' && (
+                  <>
+                    {/* Top inner profile line */}
+                    <line
+                      x1={segmentStartX}
+                      y1={centerY - innerRadius}
+                      x2={segmentEndX}
+                      y2={centerY - innerRadius}
+                      stroke="#000000"
+                      strokeWidth="2"
+                    />
+                    {/* Bottom inner profile line */}
+                    <line
+                      x1={segmentStartX}
+                      y1={centerY + innerRadius}
+                      x2={segmentEndX}
+                      y2={centerY + innerRadius}
+                      stroke="#000000"
+                      strokeWidth="2"
+                    />
+                  </>
+                )}
+                
+                {/* Vertical transitions between segments */}
+                {index === 0 && (
+                  /* End face at zero position (right side) */
+                  <>
+                    <line
+                      x1={rightX}
+                      y1={centerY - outerRadius}
+                      x2={rightX}
+                      y2={centerY - innerRadius}
+                      stroke="#000000"
+                      strokeWidth="2"
+                    />
+                    <line
+                      x1={rightX}
+                      y1={centerY + innerRadius}
+                      x2={rightX}
+                      y2={centerY + outerRadius}
+                      stroke="#000000"
+                      strokeWidth="2"
+                    />
+                  </>
+                )}
+                
+                {/* Step transition at the end of machined section */}
+                {index < profile.length - 1 && segment.type !== 'solid' && (
+                  <>
+                    <line
+                      x1={segmentEndX}
+                      y1={centerY - outerRadius}
+                      x2={segmentEndX}
+                      y2={centerY - innerRadius}
+                      stroke="#000000"
+                      strokeWidth="2"
+                    />
+                    <line
+                      x1={segmentEndX}
+                      y1={centerY + innerRadius}
+                      x2={segmentEndX}
+                      y2={centerY + outerRadius}
+                      stroke="#000000"
+                      strokeWidth="2"
+                    />
+                  </>
+                )}
+              </g>
+            );
+          })}
+          
+          {/* Left end cap (back of part) */}
+          <line
+            x1={leftX}
+            y1={centerY - (maxDiameter * scale / 2)}
+            x2={leftX}
+            y2={centerY + (maxDiameter * scale / 2)}
+            stroke="#000000"
+            strokeWidth="2"
+          />
+        </g>
+        
+        {/* Cross-hatching for machined areas - starting from zero */}
+        {profile.map((segment, index) => {
+          if (segment.type !== 'solid') {
+            const segmentStartX = rightX - (segment.startDepth * scale);
+            const segmentEndX = rightX - (segment.endDepth * scale);
+            const innerRadius = segment.radius * scale;
+            const outerRadius = (segment.outerRadius || maxDiameter / 2) * scale;
+            const segmentWidth = segmentStartX - segmentEndX;
+            
+            // Add cross-hatch pattern to show removed material
+            const hatchLines = [];
+            for (let i = 0; i < segmentWidth; i += 10) {
+              // Top material removal
+              hatchLines.push(
+                <line
+                  key={`hatch-top-${index}-${i}`}
+                  x1={segmentEndX + i}
+                  y1={centerY - outerRadius}
+                  x2={segmentEndX + i + 6}
+                  y2={centerY - innerRadius}
+                  stroke="#000000"
+                  strokeWidth="0.5"
+                  opacity="0.4"
+                />
+              );
+              // Bottom material removal
+              hatchLines.push(
+                <line
+                  key={`hatch-bottom-${index}-${i}`}
+                  x1={segmentEndX + i}
+                  y1={centerY + innerRadius}
+                  x2={segmentEndX + i + 6}
+                  y2={centerY + outerRadius}
+                  stroke="#000000"
+                  strokeWidth="0.5"
+                  opacity="0.4"
+                />
+              );
+            }
+            return <g key={`hatch-segment-${index}`}>{hatchLines}</g>;
+          }
+          return null;
+        })}
+        
+        {/* Center line */}
+        <line
+          x1={leftX - 20}
+          y1={centerY}
+          x2={rightX + 20}
+          y2={centerY}
+          stroke="#000000"
+          strokeWidth="0.5"
+          strokeDasharray="5,5"
+        />
+        
+        {/* Zero reference line at right */}
+        <line
+          x1={rightX}
+          y1={centerY - (maxDiameter * scale / 2) - 10}
+          x2={rightX}
+          y2={centerY + (maxDiameter * scale / 2) + 40}
+          stroke="#000000"
+          strokeWidth="1"
+        />
+        
+        {/* Zero label */}
+        <text x={rightX + 5} y={centerY + (maxDiameter * scale / 2) + 35} fontSize="12" fill="#000000">
+          0
+        </text>
+        
+        {/* Length dimension */}
+        {maxDepth > 0 && (
+          <g>
+            {/* Dimension line */}
+            <line 
+              x1={leftX} 
+              y1={centerY + (maxDiameter * scale / 2) + 20} 
+              x2={rightX} 
+              y2={centerY + (maxDiameter * scale / 2) + 20} 
+              stroke="#000000" 
+              strokeWidth="1"
+            />
+            {/* Left arrow */}
+            <line 
+              x1={leftX} 
+              y1={centerY + (maxDiameter * scale / 2) + 15} 
+              x2={leftX} 
+              y2={centerY + (maxDiameter * scale / 2) + 25} 
+              stroke="#000000" 
+              strokeWidth="1"
+            />
+            {/* Right arrow */}
+            <line 
+              x1={rightX} 
+              y1={centerY + (maxDiameter * scale / 2) + 15} 
+              x2={rightX} 
+              y2={centerY + (maxDiameter * scale / 2) + 25} 
+              stroke="#000000" 
+              strokeWidth="1"
+            />
+            {/* Dimension text */}
+            <text 
+              x={(leftX + rightX) / 2} 
+              y={centerY + (maxDiameter * scale / 2) + 35} 
+              textAnchor="middle" 
+              fontSize="10" 
+              fill="#000000"
+            >
+              {maxDepth.toFixed(3)}&quot;
+            </text>
+          </g>
+        )}
+        
+        {/* Diameter dimension */}
+        {maxDiameter > 0 && (
+          <g>
+            {/* Vertical dimension line */}
+            <line 
+              x1={leftX - 20} 
+              y1={centerY - (maxDiameter * scale / 2)} 
+              x2={leftX - 20} 
+              y2={centerY + (maxDiameter * scale / 2)} 
+              stroke="#000000" 
+              strokeWidth="1"
+            />
+            {/* Top arrow */}
+            <line 
+              x1={leftX - 25} 
+              y1={centerY - (maxDiameter * scale / 2)} 
+              x2={leftX - 15} 
+              y2={centerY - (maxDiameter * scale / 2)} 
+              stroke="#000000" 
+              strokeWidth="1"
+            />
+            {/* Bottom arrow */}
+            <line 
+              x1={leftX - 25} 
+              y1={centerY + (maxDiameter * scale / 2)} 
+              x2={leftX - 15} 
+              y2={centerY + (maxDiameter * scale / 2)} 
+              stroke="#000000" 
+              strokeWidth="1"
+            />
+            {/* Diameter symbol and text */}
+            <text 
+              x={leftX - 35} 
+              y={centerY + 3} 
+              textAnchor="middle" 
+              fontSize="10" 
+              fill="#000000"
+            >
+              ⌀{maxDiameter.toFixed(3)}&quot;
+            </text>
+          </g>
+        )}
+        
+        {/* Exposed length dimension if different from total */}
+        {spec.exposedLength && parseValue(spec.exposedLength) !== maxDepth && (
+          <g>
+            <line 
+              x1={rightX - parseValue(spec.exposedLength) * scale} 
+              y1={centerY + (maxDiameter * scale / 2) + 5} 
+              x2={rightX} 
+              y2={centerY + (maxDiameter * scale / 2) + 5} 
+              stroke="#000000" 
+              strokeWidth="1"
+            />
+            <line 
+              x1={rightX - parseValue(spec.exposedLength) * scale} 
+              y1={centerY + (maxDiameter * scale / 2) + 2} 
+              x2={rightX - parseValue(spec.exposedLength) * scale} 
+              y2={centerY + (maxDiameter * scale / 2) + 8} 
+              stroke="#000000" 
+              strokeWidth="1"
+            />
+            <line 
+              x1={rightX} 
+              y1={centerY + (maxDiameter * scale / 2) + 2} 
+              x2={rightX} 
+              y2={centerY + (maxDiameter * scale / 2) + 8} 
+              stroke="#000000" 
+              strokeWidth="1"
+            />
+            <text 
+              x={rightX - parseValue(spec.exposedLength) * scale / 2} 
+              y={centerY + (maxDiameter * scale / 2) + 18} 
+              textAnchor="middle" 
+              fontSize="9" 
+              fill="#000000"
+            >
+              Exposed: {spec.exposedLength}&quot;
+            </text>
+          </g>
+        )}
+        
+        {/* Drill depth dimensions */}
+        {spec.machiningSteps.map((step, index) => {
+          if (step.process === 'Drill' && step.depth) {
+            const drillDepth = parseValue(step.depth) * scale;
+            const yOffset = -20 - (index * 15);
+            return (
+              <g key={step.id}>
+                <line 
+                  x1={rightX - drillDepth} 
+                  y1={centerY + yOffset} 
+                  x2={rightX} 
+                  y2={centerY + yOffset} 
+                  stroke="#000000" 
+                  strokeWidth="1"
+                />
+                <line 
+                  x1={rightX - drillDepth} 
+                  y1={centerY + yOffset - 3} 
+                  x2={rightX - drillDepth} 
+                  y2={centerY + yOffset + 3} 
+                  stroke="#000000" 
+                  strokeWidth="1"
+                />
+                <text 
+                  x={rightX - drillDepth / 2} 
+                  y={centerY + yOffset - 5} 
+                  textAnchor="middle" 
+                  fontSize="8" 
+                  fill="#000000"
+                >
+                  {step.process} ⌀{step.size}&quot; × {step.depth}&quot;
+                </text>
+              </g>
+            );
+          }
+          return null;
+        })}
+      </svg>
+      
+      {/* Legend */}
+      <div className="mt-3 text-xs text-slate-600 dark:text-slate-400">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-1 bg-red-400 opacity-30"></div>
+            <span>Drilled holes</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-1 border border-slate-600"></div>
+            <span>Pin outline</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-px bg-green-600"></div>
+            <span>Dimensions</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default function PinsPage() {
   const [specs, setSpecs] = useState<PinSpec[]>([]);
@@ -22,21 +511,40 @@ export default function PinsPage() {
   const [currentSpec, setCurrentSpec] = useState<PinSpec>({
     id: '',
     name: '',
-    diameter: '',
-    length: '',
-    material: '',
     buildStyle: '',
-    machiningSteps: [''],
+    exposedLength: '',
+    machiningSteps: [],
     assemblyNotes: ''
   });
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [databaseError, setDatabaseError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Filter specs based on search term
+  const filteredSpecs = specs.filter(spec => 
+    spec.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    spec.buildStyle.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (spec.exposedLength && spec.exposedLength.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (spec.assemblyNotes && spec.assemblyNotes.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    spec.machiningSteps.some(step => 
+      step.process.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+  );
 
   // Fetch pins from database on component mount
   useEffect(() => {
     fetchPins();
+    
+    // Set up periodic refresh to sync changes
+    const refreshInterval = setInterval(() => {
+      if (isFirebaseConfigured()) {
+        fetchPins();
+      }
+    }, 30000); // Refresh every 30 seconds
+    
+    return () => clearInterval(refreshInterval);
   }, []);
 
   const fetchPins = async () => {
@@ -174,59 +682,92 @@ export default function PinsPage() {
       return;
     }
 
+    // Validate the ID
+    if (!id || id.trim() === '') {
+      console.error('Invalid document ID for deletion:', id);
+      setDatabaseError('Invalid document ID. Cannot delete pin.');
+      return;
+    }
+
     try {
-      setDatabaseError(null);
-
-      if (!isFirebaseConfigured()) {
-        console.log('Firebase not configured, deleting from localStorage');
-        const updatedSpecs = specs.filter(spec => spec.id !== id);
-        setSpecs(updatedSpecs);
-        localStorage.setItem('pins', JSON.stringify(updatedSpecs));
-        return;
-      }
-
-      const db = getFirestore();
-      if (!db) {
-        const updatedSpecs = specs.filter(spec => spec.id !== id);
-        setSpecs(updatedSpecs);
-        localStorage.setItem('pins', JSON.stringify(updatedSpecs));
-        return;
-      }
-
-      await deleteDoc(doc(db, 'pins', id));
-      console.log('Pin deleted from Firebase');
+      setSaving(true);
+      console.log('Attempting to delete pin with ID:', id);
       
-      await fetchPins(); // Refresh the list
+      if (isFirebaseConfigured()) {
+        const db = getFirestore();
+        if (!db) {
+          throw new Error('Firebase not available');
+        }
+        
+        // Create document reference and delete
+        const docRef = doc(db, 'pins', id);
+        console.log('Document reference created for:', docRef.path);
+        await deleteDoc(docRef);
+        console.log('Pin deleted from Firebase successfully');
+        
+        // Refresh data from Firebase
+        await fetchPins();
+      } else {
+        // Update local state for localStorage fallback
+        setSpecs(prev => prev.filter(spec => spec.id !== id));
+        // Update localStorage
+        const updatedSpecs = specs.filter(spec => spec.id !== id);
+        localStorage.setItem('pins', JSON.stringify(updatedSpecs));
+      }
+      
+      setDatabaseError(null);
     } catch (error) {
       console.error('Error deleting pin:', error);
       setDatabaseError('Failed to delete from database. Please try again.');
+    } finally {
+      setSaving(false);
     }
+  };
+
+  const handleDuplicate = (spec: PinSpec) => {
+    const duplicatedSpec: PinSpec = {
+      ...spec,
+      id: '',
+      name: `${spec.name} (Copy)`,
+      machiningSteps: spec.machiningSteps.map(step => ({
+        ...step,
+        id: Math.random().toString(36).substr(2, 9)
+      }))
+    };
+    setCurrentSpec(duplicatedSpec);
+    setIsEditing(true);
   };
 
   const resetForm = () => {
     setCurrentSpec({
       id: '',
       name: '',
-      diameter: '',
-      length: '',
-      material: '',
       buildStyle: '',
-      machiningSteps: [''],
+      exposedLength: '',
+      machiningSteps: [],
       assemblyNotes: ''
     });
     setIsEditing(false);
   };
 
   const addMachiningStep = () => {
+    const newStep: MachiningStep = {
+      id: Date.now().toString(),
+      process: 'Center Drill',
+      unit: 'inches'
+    };
     setCurrentSpec({
       ...currentSpec,
-      machiningSteps: [...currentSpec.machiningSteps, '']
+      machiningSteps: [...currentSpec.machiningSteps, newStep]
     });
   };
 
-  const updateMachiningStep = (index: number, value: string) => {
+  const updateMachiningStep = (index: number, field: keyof MachiningStep, value: string) => {
     const updatedSteps = [...currentSpec.machiningSteps];
-    updatedSteps[index] = value;
+    updatedSteps[index] = {
+      ...updatedSteps[index],
+      [field]: value
+    };
     setCurrentSpec({
       ...currentSpec,
       machiningSteps: updatedSteps
@@ -234,13 +775,11 @@ export default function PinsPage() {
   };
 
   const removeMachiningStep = (index: number) => {
-    if (currentSpec.machiningSteps.length > 1) {
-      const updatedSteps = currentSpec.machiningSteps.filter((_, i) => i !== index);
-      setCurrentSpec({
-        ...currentSpec,
-        machiningSteps: updatedSteps
-      });
-    }
+    const updatedSteps = currentSpec.machiningSteps.filter((_, i) => i !== index);
+    setCurrentSpec({
+      ...currentSpec,
+      machiningSteps: updatedSteps
+    });
   };
 
   if (loading) {
@@ -270,15 +809,24 @@ export default function PinsPage() {
               Pin Documentation
             </h1>
             <p className="text-slate-600 dark:text-slate-400 mt-2">
-              Document pin specifications, materials, dimensions, and assembly details
+              Document pin build styles, exposed lengths, machining steps, and assembly details
             </p>
           </div>
-          <button
-            onClick={() => setIsEditing(!isEditing)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors"
-          >
-            {isEditing ? 'Cancel' : 'Add New Pin'}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => fetchPins()}
+              disabled={loading}
+              className="inline-flex items-center px-3 py-2 text-sm bg-slate-600 hover:bg-slate-700 disabled:bg-slate-400 text-white rounded-lg transition-colors"
+            >
+              {loading ? '🔄' : '↻'} Refresh
+            </button>
+            <button
+              onClick={() => setIsEditing(!isEditing)}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors"
+            >
+              {isEditing ? 'Cancel' : 'Add New Pin'}
+            </button>
+          </div>
         </div>
 
         {/* Database Error Alert */}
@@ -307,76 +855,49 @@ export default function PinsPage() {
 
               <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} className="space-y-4">
                 {/* Basic Info */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      Pin Name *
-                    </label>
-                    <input
-                      type="text"
-                      value={currentSpec.name}
-                      onChange={(e) => setCurrentSpec({...currentSpec, name: e.target.value})}
-                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-slate-100"
-                      placeholder="e.g., Standard Pin, Custom Pin"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      Material
-                    </label>
-                    <input
-                      type="text"
-                      value={currentSpec.material}
-                      onChange={(e) => setCurrentSpec({...currentSpec, material: e.target.value})}
-                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-slate-100"
-                      placeholder="e.g., Stainless Steel, Brass"
-                    />
-                  </div>
-                </div>
-
-                {/* Dimensions */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      Diameter
-                    </label>
-                    <input
-                      type="text"
-                      value={currentSpec.diameter}
-                      onChange={(e) => setCurrentSpec({...currentSpec, diameter: e.target.value})}
-                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-slate-100"
-                      placeholder="e.g., 5/16&quot;, 8mm"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      Length
-                    </label>
-                    <input
-                      type="text"
-                      value={currentSpec.length}
-                      onChange={(e) => setCurrentSpec({...currentSpec, length: e.target.value})}
-                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-slate-100"
-                      placeholder="e.g., 1&quot;, 25mm"
-                    />
-                  </div>
-                </div>
-
-                {/* Build Style */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    Build Style
+                    Pin Name *
                   </label>
                   <input
                     type="text"
-                    value={currentSpec.buildStyle}
-                    onChange={(e) => setCurrentSpec({...currentSpec, buildStyle: e.target.value})}
+                    value={currentSpec.name}
+                    onChange={(e) => setCurrentSpec({...currentSpec, name: e.target.value})}
                     className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-slate-100"
-                    placeholder="e.g., Pressed, Threaded, Tapered"
+                    placeholder="e.g., Standard Pin, Custom Pin"
+                    required
                   />
+                </div>
+
+
+
+                {/* Build Style and Exposed Length */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      Build Style
+                    </label>
+                    <input
+                      type="text"
+                      value={currentSpec.buildStyle}
+                      onChange={(e) => setCurrentSpec({...currentSpec, buildStyle: e.target.value})}
+                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-slate-100"
+                      placeholder="e.g., Quick-release, Big Pin, Small Pin"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      Exposed Length
+                    </label>
+                    <input
+                      type="text"
+                      value={currentSpec.exposedLength}
+                      onChange={(e) => setCurrentSpec({...currentSpec, exposedLength: e.target.value})}
+                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-slate-100"
+                      placeholder="e.g., 1/4&quot;, 6mm"
+                    />
+                  </div>
                 </div>
 
                 {/* Machining Steps */}
@@ -385,23 +906,115 @@ export default function PinsPage() {
                     Machining Steps
                   </label>
                   {currentSpec.machiningSteps.map((step, index) => (
-                    <div key={index} className="flex gap-2 mb-2">
-                      <input
-                        type="text"
-                        value={step}
-                        onChange={(e) => updateMachiningStep(index, e.target.value)}
-                        className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-slate-100"
-                        placeholder={`Step ${index + 1}`}
-                      />
-                      {currentSpec.machiningSteps.length > 1 && (
+                    <div key={step.id} className="border border-slate-200 dark:border-slate-600 rounded-lg p-4 mb-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-medium text-slate-900 dark:text-slate-100">Step {index + 1}</h4>
                         <button
                           type="button"
                           onClick={() => removeMachiningStep(index)}
-                          className="px-3 py-2 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                          className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-sm"
                         >
                           Remove
                         </button>
-                      )}
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                        <div>
+                          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                            Process
+                          </label>
+                          <select
+                            value={step.process}
+                            onChange={(e) => updateMachiningStep(index, 'process', e.target.value)}
+                            className="w-full px-2 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded focus:ring-1 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                          >
+                            <option value="Center Drill">Center Drill</option>
+                            <option value="Drill">Drill</option>
+                            <option value="Tap">Tap</option>
+                            <option value="Bore">Bore</option>
+                            <option value="Ream">Ream</option>
+                            <option value="Face">Face</option>
+                          </select>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                            Unit
+                          </label>
+                          <select
+                            value={step.unit}
+                            onChange={(e) => updateMachiningStep(index, 'unit', e.target.value as 'inches' | 'mm')}
+                            className="w-full px-2 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded focus:ring-1 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                          >
+                            <option value="inches">Inches</option>
+                            <option value="mm">mm</option>
+                          </select>
+                        </div>
+                        
+                        {step.process === 'Drill' && (
+                          <>
+                            <div>
+                              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                                Size
+                              </label>
+                              <input
+                                type="text"
+                                value={step.size || ''}
+                                onChange={(e) => updateMachiningStep(index, 'size', e.target.value)}
+                                className="w-full px-2 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded focus:ring-1 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                                placeholder="e.g., 1/4, 6.35"
+                              />
+                            </div>
+                          </>
+                        )}
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {step.process === 'Drill' && (
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                              Depth
+                            </label>
+                            <input
+                              type="text"
+                              value={step.depth || ''}
+                              onChange={(e) => updateMachiningStep(index, 'depth', e.target.value)}
+                              className="w-full px-2 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded focus:ring-1 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                              placeholder="e.g., 0.5, 12"
+                            />
+                          </div>
+                        )}
+                        
+                        {step.process === 'Tap' && (
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                              Thread Size
+                            </label>
+                            <input
+                              type="text"
+                              value={step.threadSize || ''}
+                              onChange={(e) => updateMachiningStep(index, 'threadSize', e.target.value)}
+                              className="w-full px-2 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded focus:ring-1 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                              placeholder="e.g., 10-32, M6x1.0"
+                            />
+                          </div>
+                        )}
+                        
+                        {step.process === 'Bore' && (
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                              Final Diameter
+                            </label>
+                            <input
+                              type="text"
+                              value={step.finalDiameter || ''}
+                              onChange={(e) => updateMachiningStep(index, 'finalDiameter', e.target.value)}
+                              className="w-full px-2 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded focus:ring-1 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                              placeholder="e.g., 0.375, 9.5"
+                            />
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ))}
                   <button
@@ -409,7 +1022,7 @@ export default function PinsPage() {
                     onClick={addMachiningStep}
                     className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-sm"
                   >
-                    + Add Step
+                    + Add Machining Step
                   </button>
                 </div>
 
@@ -426,6 +1039,11 @@ export default function PinsPage() {
                     placeholder="Assembly instructions, special considerations, etc."
                   />
                 </div>
+
+                {/* Technical Drawing */}
+                {(currentSpec.machiningSteps.length > 0 || currentSpec.exposedLength) && (
+                  <TechnicalDrawing spec={currentSpec} />
+                )}
 
                 {/* Action Buttons */}
                 <div className="flex gap-3 pt-4">
@@ -456,6 +1074,22 @@ export default function PinsPage() {
               </h2>
             </div>
 
+            {/* Search Field */}
+            {specs.length > 0 && (
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  Search Pins
+                </label>
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-slate-100"
+                  placeholder="Search by name, build style, exposed length, or notes..."
+                />
+              </div>
+            )}
+
             {specs.length === 0 ? (
               <div className="text-center py-12">
                 <div className="text-6xl mb-4">📍</div>
@@ -472,9 +1106,25 @@ export default function PinsPage() {
                   Add Your First Pin
                 </button>
               </div>
+            ) : filteredSpecs.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="text-6xl mb-4">🔍</div>
+                <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-2">
+                  No pins match your search
+                </h3>
+                <p className="text-slate-600 dark:text-slate-400 mb-4">
+                  Try adjusting your search terms or clear the search to see all pins.
+                </p>
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors"
+                >
+                  Clear Search
+                </button>
+              </div>
             ) : (
               <div className="space-y-4">
-                {specs.map((spec) => (
+                {filteredSpecs.map((spec) => (
                   <div key={spec.id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 hover:shadow-md transition-shadow">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
@@ -482,40 +1132,53 @@ export default function PinsPage() {
                           {spec.name}
                         </h3>
                         
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3 text-sm">
-                          <div>
-                            <span className="text-slate-500 dark:text-slate-400">Material:</span>
-                            <div className="font-medium text-slate-900 dark:text-slate-100">{spec.material || 'Not specified'}</div>
-                          </div>
-                          <div>
-                            <span className="text-slate-500 dark:text-slate-400">Diameter:</span>
-                            <div className="font-medium text-slate-900 dark:text-slate-100">{spec.diameter || 'Not specified'}</div>
-                          </div>
-                          <div>
-                            <span className="text-slate-500 dark:text-slate-400">Length:</span>
-                            <div className="font-medium text-slate-900 dark:text-slate-100">{spec.length || 'Not specified'}</div>
-                          </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3 text-sm">
                           <div>
                             <span className="text-slate-500 dark:text-slate-400">Build Style:</span>
                             <div className="font-medium text-slate-900 dark:text-slate-100">{spec.buildStyle || 'Not specified'}</div>
                           </div>
+                          <div>
+                            <span className="text-slate-500 dark:text-slate-400">Exposed Length:</span>
+                            <div className="font-medium text-slate-900 dark:text-slate-100">{spec.exposedLength || 'Not specified'}</div>
+                          </div>
                         </div>
 
-                        {spec.machiningSteps.length > 0 && spec.machiningSteps[0] && (
+                        {spec.machiningSteps.length > 0 && (
                           <div className="mb-3">
                             <span className="text-slate-500 dark:text-slate-400 text-sm">Machining Steps:</span>
                             <ol className="list-decimal list-inside text-sm text-slate-700 dark:text-slate-300 mt-1 space-y-1">
                               {spec.machiningSteps.map((step, index) => (
-                                step && <li key={index}>{step}</li>
+                                <li key={step.id}>
+                                  <span className="font-medium">{step.process}</span>
+                                  {step.process === 'Drill' && step.size && (
+                                    <span> - Size: {step.size}{step.unit === 'inches' ? '"' : 'mm'}</span>
+                                  )}
+                                  {step.process === 'Drill' && step.depth && (
+                                    <span>, Depth: {step.depth}{step.unit === 'inches' ? '"' : 'mm'}</span>
+                                  )}
+                                  {step.process === 'Tap' && step.threadSize && (
+                                    <span> - {step.threadSize}</span>
+                                  )}
+                                  {step.process === 'Bore' && step.finalDiameter && (
+                                    <span> - Final Ø: {step.finalDiameter}{step.unit === 'inches' ? '"' : 'mm'}</span>
+                                  )}
+                                </li>
                               ))}
                             </ol>
                           </div>
                         )}
 
                         {spec.assemblyNotes && (
-                          <div>
+                          <div className="mb-3">
                             <span className="text-slate-500 dark:text-slate-400 text-sm">Assembly Notes:</span>
                             <p className="text-sm text-slate-700 dark:text-slate-300 mt-1">{spec.assemblyNotes}</p>
+                          </div>
+                        )}
+
+                        {/* Technical Drawing for saved pins */}
+                        {(spec.machiningSteps.length > 0 || spec.exposedLength) && (
+                          <div className="mt-3">
+                            <TechnicalDrawing spec={spec} />
                           </div>
                         )}
                       </div>
@@ -528,6 +1191,15 @@ export default function PinsPage() {
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => handleDuplicate(spec)}
+                          className="text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 p-2"
+                          title="Duplicate pin"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                           </svg>
                         </button>
                         <button

@@ -16,6 +16,7 @@ export function getFirestore(): Firestore | null {
   // Only initialize if we have real credentials
   if (firebaseConfig.apiKey === 'placeholder-api-key' || 
       firebaseConfig.projectId === 'placeholder-project') {
+    console.warn('Firebase not configured - using placeholder values');
     return null;
   }
 
@@ -24,6 +25,9 @@ export function getFirestore(): Firestore | null {
       // Initialize Firebase only if it hasn't been initialized yet
       const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
       firestore = getFirestoreInstance(app);
+      
+      // Configure Firestore settings to avoid real-time connection issues
+      console.log('Firebase initialized successfully');
     } catch (error) {
       console.error('Failed to initialize Firebase:', error);
       firestore = null;

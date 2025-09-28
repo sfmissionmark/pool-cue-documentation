@@ -43,6 +43,15 @@ export default function FerrulesPage() {
   // Fetch ferrules from database on component mount
   useEffect(() => {
     fetchFerrules();
+    
+    // Set up periodic refresh to sync changes
+    const refreshInterval = setInterval(() => {
+      if (isFirebaseConfigured()) {
+        fetchFerrules();
+      }
+    }, 30000); // Refresh every 30 seconds
+    
+    return () => clearInterval(refreshInterval);
   }, []);
 
   const fetchFerrules = async () => {
@@ -219,6 +228,16 @@ export default function FerrulesPage() {
     }
   };
 
+  const handleDuplicate = (spec: FerruleSpec) => {
+    const duplicatedSpec: FerruleSpec = {
+      ...spec,
+      id: '',
+      name: `${spec.name} (Copy)`,
+    };
+    setCurrentSpec(duplicatedSpec);
+    setIsEditing(true);
+  };
+
   const addMachiningStep = () => {
     setCurrentSpec(prev => ({
       ...prev,
@@ -244,12 +263,21 @@ export default function FerrulesPage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <Link 
-            href="/" 
-            className="inline-flex items-center text-blue-600 dark:text-blue-400 hover:underline mb-4"
-          >
-            ← Back to Components
-          </Link>
+          <div className="flex justify-between items-start mb-4">
+            <Link 
+              href="/" 
+              className="inline-flex items-center text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              ← Back to Components
+            </Link>
+            <button
+              onClick={() => fetchFerrules()}
+              disabled={loading}
+              className="inline-flex items-center px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-md transition-colors"
+            >
+              {loading ? '🔄' : '↻'} Refresh
+            </button>
+          </div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2">
             🔧 Ferrules Documentation
           </h1>
@@ -499,6 +527,12 @@ export default function FerrulesPage() {
                           className="text-blue-600 dark:text-blue-400 hover:underline text-sm"
                         >
                           Edit
+                        </button>
+                        <button
+                          onClick={() => handleDuplicate(spec)}
+                          className="text-green-600 dark:text-green-400 hover:underline text-sm"
+                        >
+                          Duplicate
                         </button>
                         <button
                           onClick={() => handleDelete(spec.id)}

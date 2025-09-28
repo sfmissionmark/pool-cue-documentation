@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "pool-cue-documentation"
-  }
+    "default": "pool-cue-documentation",
+    "np": "pool-cue-documentation"
+  },
+  "targets": {},
+  "etags": {}
 }
