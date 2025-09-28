@@ -962,19 +962,21 @@ export default function PinsPage() {
                           </select>
                         </div>
                         
-                        <div>
-                          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
-                            Unit
-                          </label>
-                          <select
-                            value={step.unit}
-                            onChange={(e) => updateMachiningStep(index, 'unit', e.target.value as 'inches' | 'mm')}
-                            className="w-full px-2 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded focus:ring-1 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
-                          >
-                            <option value="inches">Inches</option>
-                            <option value="mm">mm</option>
-                          </select>
-                        </div>
+                        {step.process !== 'Center Drill' && (
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                              Unit
+                            </label>
+                            <select
+                              value={step.unit}
+                              onChange={(e) => updateMachiningStep(index, 'unit', e.target.value as 'inches' | 'mm')}
+                              className="w-full px-2 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded focus:ring-1 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                            >
+                              <option value="inches">Inches</option>
+                              <option value="mm">mm</option>
+                            </select>
+                          </div>
+                        )}
                         
                         {step.process === 'Drill' && (
                           <>
