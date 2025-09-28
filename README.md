@@ -1,5 +1,8 @@
 # Pool Cue Documentation App 🎱
 
+[![GitHub](https://img.shields.io/badge/GitHub-sfmissionmark/pool--cue--documentation-blue?logo=github)](https://github.com/sfmissionmark/pool-cue-documentation)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/sfmissionmark/pool-cue-documentation)
+
 A comprehensive documentation system for pool cue components built with Next.js, Tailwind CSS, and Firebase. This application allows you to document specifications, build processes, machining steps, and assembly notes for various pool cue components.
 
 ## Features
