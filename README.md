@@ -66,13 +66,20 @@ Your data will automatically sync to the cloud! 🔥
 
 ## Deployment
 
-This is a standard Next.js application that can be deployed to any platform that supports Node.js:
+### Firebase Hosting (Recommended)
+This project is configured for **automatic deployment** to Firebase Hosting:
+
+- **Auto-Deploy**: Pushes to `main` branch automatically deploy
+- **Live Site**: https://pool-cue-documentation.web.app
+- **Setup Guide**: See `DEPLOY.md` for complete setup instructions
+
+### Manual Deployment
+This is a standard Next.js application that can also be deployed elsewhere:
 
 - **Static Export**: Run `npm run build` for static files
 - **Server**: Deploy to any Node.js hosting platform
 - **Environment Variables**: Set Firebase config in your deployment platform
 - **Build Command**: `npm run build`
-- **Start Command**: `npm start`
 
 ## Learn More
 

@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import { getFirestore, isFirebaseConfigured } from '@/lib/firebase';
+import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, query, orderBy, Timestamp } from 'firebase/firestore';
 
 interface FerruleSpec {
   id: string;
@@ -47,31 +49,47 @@ export default function FerrulesPage() {
     try {
       setLoading(true);
       setDatabaseError(null);
-      const response = await fetch('/api/ferrules');
-      if (response.ok) {
-        const data = await response.json();
-        // If we get empty array and no database, load from localStorage
-        if (Array.isArray(data) && data.length === 0) {
-          const savedSpecs = localStorage.getItem('ferrule-specs');
-          if (savedSpecs) {
-            const parsedSpecs = JSON.parse(savedSpecs);
-            setSpecs(parsedSpecs);
-            setDatabaseError('Firebase not configured - using browser storage');
-          } else {
-            setSpecs([]);
-          }
-        } else {
-          setSpecs(data);
-        }
-      } else {
-        console.error('Failed to fetch ferrules');
-        // Fallback to localStorage on any error
+
+      // Check if Firebase is configured
+      if (!isFirebaseConfigured()) {
         const savedSpecs = localStorage.getItem('ferrule-specs');
         setSpecs(savedSpecs ? JSON.parse(savedSpecs) : []);
         setDatabaseError('Firebase not configured - using browser storage');
+        return;
       }
+
+      const db = getFirestore();
+      if (!db) {
+        const savedSpecs = localStorage.getItem('ferrule-specs');
+        setSpecs(savedSpecs ? JSON.parse(savedSpecs) : []);
+        setDatabaseError('Firebase not configured - using browser storage');
+        return;
+      }
+
+      const ferrulesRef = collection(db, 'ferrule_specs');
+      const q = query(ferrulesRef, orderBy('created_at', 'desc'));
+      const querySnapshot = await getDocs(q);
+
+      const ferrules = querySnapshot.docs.map(docSnapshot => {
+        const data = docSnapshot.data();
+        return {
+          id: docSnapshot.id,
+          name: data.name,
+          diameter: data.diameter,
+          length: data.length,
+          material: data.material,
+          buildStyle: data.build_style,
+          machiningSteps: data.machining_steps || [],
+          assemblyNotes: data.assembly_notes,
+          vaultPlate: data.vault_plate || false,
+          vaultPlateMaterial: data.vault_plate_material,
+          vaultPlateThickness: data.vault_plate_thickness,
+        };
+      });
+
+      setSpecs(ferrules);
     } catch (error) {
-      console.error('Error fetching ferrules:', error);
+      console.error('Firebase GET Error:', error);
       // Fallback to localStorage on error
       const savedSpecs = localStorage.getItem('ferrule-specs');
       setSpecs(savedSpecs ? JSON.parse(savedSpecs) : []);
@@ -85,51 +103,62 @@ export default function FerrulesPage() {
     try {
       setSaving(true);
       
-      if (currentSpec.id) {
-        // Update existing ferrule
-        const response = await fetch('/api/ferrules', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(currentSpec)
-        });
-        
-        if (response.ok) {
-          const result = await response.json();
-          if (result.localStorage) {
-            // Use localStorage
-            const updatedSpecs = specs.map(spec => spec.id === currentSpec.id ? currentSpec : spec);
-            setSpecs(updatedSpecs);
-            localStorage.setItem('ferrule-specs', JSON.stringify(updatedSpecs));
-          } else {
-            // Database worked, refresh from server
-            await fetchFerrules();
-          }
+      // Check if Firebase is configured
+      if (!isFirebaseConfigured()) {
+        // Use localStorage
+        if (currentSpec.id) {
+          const updatedSpecs = specs.map(spec => spec.id === currentSpec.id ? currentSpec : spec);
+          setSpecs(updatedSpecs);
+          localStorage.setItem('ferrule-specs', JSON.stringify(updatedSpecs));
         } else {
-          throw new Error('Failed to update ferrule');
+          const newSpec = { ...currentSpec, id: Date.now().toString() };
+          const updatedSpecs = [...specs, newSpec];
+          setSpecs(updatedSpecs);
+          localStorage.setItem('ferrule-specs', JSON.stringify(updatedSpecs));
         }
       } else {
-        // Create new ferrule
-        const newSpec = { ...currentSpec, id: Date.now().toString() };
-        const response = await fetch('/api/ferrules', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newSpec)
-        });
-        
-        if (response.ok) {
-          const result = await response.json();
-          if (result.localStorage) {
-            // Use localStorage
-            const updatedSpecs = [...specs, newSpec];
-            setSpecs(updatedSpecs);
-            localStorage.setItem('ferrule-specs', JSON.stringify(updatedSpecs));
-          } else {
-            // Database worked, refresh from server
-            await fetchFerrules();
-          }
-        } else {
-          throw new Error('Failed to create ferrule');
+        const db = getFirestore();
+        if (!db) {
+          throw new Error('Firebase not available');
         }
+
+        if (currentSpec.id) {
+          // Update existing ferrule
+          const docRef = doc(db, 'ferrule_specs', currentSpec.id);
+          await updateDoc(docRef, {
+            name: currentSpec.name,
+            diameter: currentSpec.diameter,
+            length: currentSpec.length,
+            material: currentSpec.material,
+            build_style: currentSpec.buildStyle,
+            machining_steps: currentSpec.machiningSteps || [],
+            assembly_notes: currentSpec.assemblyNotes,
+            vault_plate: currentSpec.vaultPlate || false,
+            vault_plate_material: currentSpec.vaultPlateMaterial || null,
+            vault_plate_thickness: currentSpec.vaultPlateThickness || null,
+            updated_at: Timestamp.now()
+          });
+        } else {
+          // Create new ferrule
+          const ferrulesRef = collection(db, 'ferrule_specs');
+          await addDoc(ferrulesRef, {
+            name: currentSpec.name,
+            diameter: currentSpec.diameter,
+            length: currentSpec.length,
+            material: currentSpec.material,
+            build_style: currentSpec.buildStyle,
+            machining_steps: currentSpec.machiningSteps || [],
+            assembly_notes: currentSpec.assemblyNotes,
+            vault_plate: currentSpec.vaultPlate || false,
+            vault_plate_material: currentSpec.vaultPlateMaterial || null,
+            vault_plate_thickness: currentSpec.vaultPlateThickness || null,
+            created_at: Timestamp.now(),
+            updated_at: Timestamp.now()
+          });
+        }
+        
+        // Refresh from Firebase
+        await fetchFerrules();
       }
       
       // Reset form
@@ -149,7 +178,7 @@ export default function FerrulesPage() {
       });
     } catch (error) {
       console.error('Error saving ferrule:', error);
-      alert('Failed to save ferrule. Check your database configuration.');
+      alert('Failed to save ferrule. Check your Firebase configuration.');
     } finally {
       setSaving(false);
     }
@@ -166,23 +195,23 @@ export default function FerrulesPage() {
     }
     
     try {
-      const response = await fetch(`/api/ferrules?id=${id}`, {
-        method: 'DELETE'
-      });
-      
-      if (response.ok) {
-        const result = await response.json();
-        if (result.localStorage) {
-          // Use localStorage
-          const newSpecs = specs.filter(spec => spec.id !== id);
-          setSpecs(newSpecs);
-          localStorage.setItem('ferrule-specs', JSON.stringify(newSpecs));
-        } else {
-          // Database worked, refresh from server
-          await fetchFerrules();
-        }
+      // Check if Firebase is configured
+      if (!isFirebaseConfigured()) {
+        // Use localStorage
+        const newSpecs = specs.filter(spec => spec.id !== id);
+        setSpecs(newSpecs);
+        localStorage.setItem('ferrule-specs', JSON.stringify(newSpecs));
       } else {
-        throw new Error('Failed to delete ferrule');
+        const db = getFirestore();
+        if (!db) {
+          throw new Error('Firebase not available');
+        }
+
+        const docRef = doc(db, 'ferrule_specs', id);
+        await deleteDoc(docRef);
+        
+        // Refresh from Firebase
+        await fetchFerrules();
       }
     } catch (error) {
       console.error('Error deleting ferrule:', error);
