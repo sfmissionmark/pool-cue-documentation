@@ -5,7 +5,13 @@ const cueComponents = [
     id: "ferrules",
     name: "Ferrules",
     description: "Document ferrule specifications, materials, vault plates, and assembly notes",
-    icon: "�"
+    icon: "🔧"
+  },
+  {
+    id: "pins",
+    name: "Pins",
+    description: "Document pin specifications, materials, dimensions, and assembly details",
+    icon: "📍"
   }
 ];
 
@@ -15,10 +21,10 @@ export default function Home() {
       <div className="container mx-auto px-4 py-8">
         <header className="text-center mb-12">
                     <h1 className="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-4">
-            Ferrule Documentation
+            Cue Component Documentation
           </h1>
           <p className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
-            Document your ferrule specifications with detailed dimensions, materials, vault plates, 
+            Document your cue component specifications including ferrules and pins with detailed dimensions, materials, 
             machining steps, and assembly notes. All with Firebase cloud storage.
           </p>
         </header>
