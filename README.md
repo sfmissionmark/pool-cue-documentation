@@ -1,7 +1,6 @@
 # Pool Cue Documentation App 🎱
 
 [![GitHub](https://img.shields.io/badge/GitHub-sfmissionmark/pool--cue--documentation-blue?logo=github)](https://github.com/sfmissionmark/pool-cue-documentation)
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/sfmissionmark/pool-cue-documentation)
 
 A comprehensive documentation system for pool cue components built with Next.js, Tailwind CSS, and Firebase. This application allows you to document specifications, build processes, machining steps, and assembly notes for various pool cue components.
 
@@ -63,15 +62,25 @@ Your data will automatically sync to the cloud! 🔥
 - **Frontend**: Next.js 15 with App Router, React, TypeScript
 - **Styling**: Tailwind CSS with dark mode support
 - **Database**: Firebase Firestore (with localStorage fallback)
-- **Deployment**: Vercel-ready
 - **Fonts**: Geist font family (optimized with `next/font`)
+
+## Deployment
+
+This is a standard Next.js application that can be deployed to any platform that supports Node.js:
+
+- **Static Export**: Run `npm run build` for static files
+- **Server**: Deploy to any Node.js hosting platform
+- **Environment Variables**: Set Firebase config in your deployment platform
+- **Build Command**: `npm run build`
+- **Start Command**: `npm start`
 
 ## Learn More
 
-To learn more about Next.js, take a look at the following resources:
+To learn more about Next.js and the technologies used:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API
+- [Firebase Documentation](https://firebase.google.com/docs) - learn about Firebase Firestore
+- [Tailwind CSS](https://tailwindcss.com/docs) - utility-first CSS framework
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 

@@ -92,17 +92,16 @@ service cloud.firestore {
 
 ## 🚀 Deployment
 
-When you deploy to Vercel:
-1. Go to your Vercel project dashboard
-2. Go to **Settings** → **Environment Variables**
-3. Add all six Firebase environment variables:
+When you deploy to any hosting platform:
+1. Set up environment variables in your hosting platform's dashboard
+2. Add all six Firebase environment variables:
    - `NEXT_PUBLIC_FIREBASE_API_KEY`
    - `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
    - `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
    - `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
    - `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
    - `NEXT_PUBLIC_FIREBASE_APP_ID`
-4. Redeploy your project
+3. Deploy your project with build command: `npm run build`
 
 ## 🔐 Security (After Testing)
 
