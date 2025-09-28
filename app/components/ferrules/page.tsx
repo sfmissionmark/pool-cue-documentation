@@ -150,7 +150,7 @@ export default function FerrulesPage() {
         } else {
           // Create new ferrule
           const ferrulesRef = collection(db, 'ferrule_specs');
-          await addDoc(ferrulesRef, {
+          const docRef = await addDoc(ferrulesRef, {
             name: currentSpec.name,
             diameter: currentSpec.diameter,
             length: currentSpec.length,
@@ -164,6 +164,12 @@ export default function FerrulesPage() {
             created_at: Timestamp.now(),
             updated_at: Timestamp.now()
           });
+          
+          // Update the currentSpec with the Firebase-generated ID
+          setCurrentSpec(prevSpec => ({
+            ...prevSpec,
+            id: docRef.id
+          }));
         }
         
         // Refresh from Firebase

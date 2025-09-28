@@ -24,8 +24,10 @@ interface PinSpec {
   assemblyNotes: string;
 }
 
-// Technical Drawing Component
-const TechnicalDrawing = ({ spec }: { spec: PinSpec }) => {
+// Technical Drawing Modal Component
+const TechnicalDrawingModal = ({ spec, isOpen, onClose }: { spec: PinSpec; isOpen: boolean; onClose: () => void }) => {
+  const [zoom, setZoom] = useState(1);
+  
   const parseValue = (value: string | undefined): number => {
     if (!value) return 0;
     // Handle fractions like 1/4, 3/8, etc.
@@ -124,384 +126,401 @@ const TechnicalDrawing = ({ spec }: { spec: PinSpec }) => {
     return profile;
   };
 
+  const handlePrint = () => {
+    window.print();
+  };
+
+  if (!isOpen) return null;
+
   const maxDiameter = getMaxDiameter();
   const maxDepth = getMaxDepth();
-  const scale = 80; // Scale factor for drawing
-  const centerY = 80;
-  const rightX = 350; // Start from right side (0 position)
+  const baseScale = 120; // Larger scale for detailed view
+  const scale = baseScale * zoom;
+  const centerY = 200;
+  const rightX = 600; // Start from right side (0 position)
   const leftX = rightX - (maxDepth * scale); // Calculate left position
   const profile = generateProfile();
-  
+  const svgWidth = Math.max(800, Math.abs(leftX - rightX) + 200);
+  const svgHeight = Math.max(400, (maxDiameter * scale) + 200);
+
   return (
-    <div className="bg-white rounded-lg p-4 border border-slate-200">
-      <h4 className="text-sm font-medium text-slate-700 mb-3">Technical Drawing (Finished Profile)</h4>
-      <svg width="400" height="180" className="bg-white">
-        
-        {/* Create the subtractive profile - machining from zero (right) inward */}
-        <g>
-          {profile.map((segment, index) => {
-            // Calculate X positions: startDepth and endDepth are distances from zero (rightX)
-            const segmentStartX = rightX - (segment.startDepth * scale); // Starting point from zero
-            const segmentEndX = rightX - (segment.endDepth * scale);     // Ending point from zero
-            const innerRadius = segment.radius * scale;
-            const outerRadius = (segment.outerRadius || maxDiameter / 2) * scale;
-            
-            return (
-              <g key={`segment-${index}`}>
-                {/* Top outer profile line */}
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg max-w-6xl max-h-[90vh] w-full overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="flex justify-between items-center p-4 border-b border-slate-200">
+          <h2 className="text-xl font-semibold text-slate-900">Technical Drawing - {spec.name}</h2>
+          <div className="flex items-center gap-4">
+            {/* Zoom Controls */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setZoom(Math.max(0.5, zoom - 0.25))}
+                className="px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded text-sm"
+              >
+                −
+              </button>
+              <span className="text-sm font-medium">{Math.round(zoom * 100)}%</span>
+              <button
+                onClick={() => setZoom(Math.min(3, zoom + 0.25))}
+                className="px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded text-sm"
+              >
+                +
+              </button>
+            </div>
+            {/* Print Button */}
+            <button
+              onClick={handlePrint}
+              className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm"
+            >
+              Print
+            </button>
+            {/* Close Button */}
+            <button
+              onClick={onClose}
+              className="px-3 py-1 bg-slate-600 hover:bg-slate-700 text-white rounded text-sm"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+
+        {/* Drawing Area */}
+        <div className="flex-1 overflow-auto bg-white p-4">
+          <div className="flex justify-center">
+            <svg width={svgWidth} height={svgHeight} className="bg-white border border-slate-200">
+              {/* Create the subtractive profile - machining from zero (right) inward */}
+              <g>
+                {profile.map((segment, index) => {
+                  // Calculate X positions: startDepth and endDepth are distances from zero (rightX)
+                  const segmentStartX = rightX - (segment.startDepth * scale); // Starting point from zero
+                  const segmentEndX = rightX - (segment.endDepth * scale);     // Ending point from zero
+                  const innerRadius = segment.radius * scale;
+                  const outerRadius = (segment.outerRadius || maxDiameter / 2) * scale;
+                  
+                  return (
+                    <g key={`segment-${index}`}>
+                      {/* Top outer profile line */}
+                      <line
+                        x1={segmentStartX}
+                        y1={centerY - outerRadius}
+                        x2={segmentEndX}
+                        y2={centerY - outerRadius}
+                        stroke="#000000"
+                        strokeWidth="2"
+                      />
+                      {/* Bottom outer profile line */}
+                      <line
+                        x1={segmentStartX}
+                        y1={centerY + outerRadius}
+                        x2={segmentEndX}
+                        y2={centerY + outerRadius}
+                        stroke="#000000"
+                        strokeWidth="2"
+                      />
+                      
+                      {/* For machined sections, show the inner profile */}
+                      {segment.type !== 'solid' && (
+                        <>
+                          {/* Top inner profile line */}
+                          <line
+                            x1={segmentStartX}
+                            y1={centerY - innerRadius}
+                            x2={segmentEndX}
+                            y2={centerY - innerRadius}
+                            stroke="#000000"
+                            strokeWidth="2"
+                          />
+                          {/* Bottom inner profile line */}
+                          <line
+                            x1={segmentStartX}
+                            y1={centerY + innerRadius}
+                            x2={segmentEndX}
+                            y2={centerY + innerRadius}
+                            stroke="#000000"
+                            strokeWidth="2"
+                          />
+                        </>
+                      )}
+                      
+                      {/* Vertical transitions between segments */}
+                      {index === 0 && (
+                        /* End face at zero position (right side) */
+                        <>
+                          <line
+                            x1={rightX}
+                            y1={centerY - outerRadius}
+                            x2={rightX}
+                            y2={centerY - innerRadius}
+                            stroke="#000000"
+                            strokeWidth="2"
+                          />
+                          <line
+                            x1={rightX}
+                            y1={centerY + innerRadius}
+                            x2={rightX}
+                            y2={centerY + outerRadius}
+                            stroke="#000000"
+                            strokeWidth="2"
+                          />
+                        </>
+                      )}
+                      
+                      {/* Step transition at the end of machined section */}
+                      {index < profile.length - 1 && segment.type !== 'solid' && (
+                        <>
+                          <line
+                            x1={segmentEndX}
+                            y1={centerY - outerRadius}
+                            x2={segmentEndX}
+                            y2={centerY - innerRadius}
+                            stroke="#000000"
+                            strokeWidth="2"
+                          />
+                          <line
+                            x1={segmentEndX}
+                            y1={centerY + innerRadius}
+                            x2={segmentEndX}
+                            y2={centerY + outerRadius}
+                            stroke="#000000"
+                            strokeWidth="2"
+                          />
+                        </>
+                      )}
+                    </g>
+                  );
+                })}
+                
+                {/* Left end cap (back of part) */}
                 <line
-                  x1={segmentStartX}
-                  y1={centerY - outerRadius}
-                  x2={segmentEndX}
-                  y2={centerY - outerRadius}
+                  x1={leftX}
+                  y1={centerY - (maxDiameter * scale / 2)}
+                  x2={leftX}
+                  y2={centerY + (maxDiameter * scale / 2)}
                   stroke="#000000"
                   strokeWidth="2"
                 />
-                {/* Bottom outer profile line */}
-                <line
-                  x1={segmentStartX}
-                  y1={centerY + outerRadius}
-                  x2={segmentEndX}
-                  y2={centerY + outerRadius}
-                  stroke="#000000"
-                  strokeWidth="2"
-                />
-                
-                {/* For machined sections, show the inner profile */}
-                {segment.type !== 'solid' && (
-                  <>
-                    {/* Top inner profile line */}
-                    <line
-                      x1={segmentStartX}
-                      y1={centerY - innerRadius}
-                      x2={segmentEndX}
-                      y2={centerY - innerRadius}
-                      stroke="#000000"
-                      strokeWidth="2"
-                    />
-                    {/* Bottom inner profile line */}
-                    <line
-                      x1={segmentStartX}
-                      y1={centerY + innerRadius}
-                      x2={segmentEndX}
-                      y2={centerY + innerRadius}
-                      stroke="#000000"
-                      strokeWidth="2"
-                    />
-                  </>
-                )}
-                
-                {/* Vertical transitions between segments */}
-                {index === 0 && (
-                  /* End face at zero position (right side) */
-                  <>
-                    <line
-                      x1={rightX}
-                      y1={centerY - outerRadius}
-                      x2={rightX}
-                      y2={centerY - innerRadius}
-                      stroke="#000000"
-                      strokeWidth="2"
-                    />
-                    <line
-                      x1={rightX}
-                      y1={centerY + innerRadius}
-                      x2={rightX}
-                      y2={centerY + outerRadius}
-                      stroke="#000000"
-                      strokeWidth="2"
-                    />
-                  </>
-                )}
-                
-                {/* Step transition at the end of machined section */}
-                {index < profile.length - 1 && segment.type !== 'solid' && (
-                  <>
-                    <line
-                      x1={segmentEndX}
-                      y1={centerY - outerRadius}
-                      x2={segmentEndX}
-                      y2={centerY - innerRadius}
-                      stroke="#000000"
-                      strokeWidth="2"
-                    />
-                    <line
-                      x1={segmentEndX}
-                      y1={centerY + innerRadius}
-                      x2={segmentEndX}
-                      y2={centerY + outerRadius}
-                      stroke="#000000"
-                      strokeWidth="2"
-                    />
-                  </>
-                )}
               </g>
-            );
-          })}
-          
-          {/* Left end cap (back of part) */}
-          <line
-            x1={leftX}
-            y1={centerY - (maxDiameter * scale / 2)}
-            x2={leftX}
-            y2={centerY + (maxDiameter * scale / 2)}
-            stroke="#000000"
-            strokeWidth="2"
-          />
-        </g>
-        
-        {/* Cross-hatching for machined areas - starting from zero */}
-        {profile.map((segment, index) => {
-          if (segment.type !== 'solid') {
-            const segmentStartX = rightX - (segment.startDepth * scale);
-            const segmentEndX = rightX - (segment.endDepth * scale);
-            const innerRadius = segment.radius * scale;
-            const outerRadius = (segment.outerRadius || maxDiameter / 2) * scale;
-            const segmentWidth = segmentStartX - segmentEndX;
-            
-            // Add cross-hatch pattern to show removed material
-            const hatchLines = [];
-            for (let i = 0; i < segmentWidth; i += 10) {
-              // Top material removal
-              hatchLines.push(
-                <line
-                  key={`hatch-top-${index}-${i}`}
-                  x1={segmentEndX + i}
-                  y1={centerY - outerRadius}
-                  x2={segmentEndX + i + 6}
-                  y2={centerY - innerRadius}
-                  stroke="#000000"
-                  strokeWidth="0.5"
-                  opacity="0.4"
-                />
-              );
-              // Bottom material removal
-              hatchLines.push(
-                <line
-                  key={`hatch-bottom-${index}-${i}`}
-                  x1={segmentEndX + i}
-                  y1={centerY + innerRadius}
-                  x2={segmentEndX + i + 6}
-                  y2={centerY + outerRadius}
-                  stroke="#000000"
-                  strokeWidth="0.5"
-                  opacity="0.4"
-                />
-              );
-            }
-            return <g key={`hatch-segment-${index}`}>{hatchLines}</g>;
-          }
-          return null;
-        })}
-        
-        {/* Center line */}
-        <line
-          x1={leftX - 20}
-          y1={centerY}
-          x2={rightX + 20}
-          y2={centerY}
-          stroke="#000000"
-          strokeWidth="0.5"
-          strokeDasharray="5,5"
-        />
-        
-        {/* Zero reference line at right */}
-        <line
-          x1={rightX}
-          y1={centerY - (maxDiameter * scale / 2) - 10}
-          x2={rightX}
-          y2={centerY + (maxDiameter * scale / 2) + 40}
-          stroke="#000000"
-          strokeWidth="1"
-        />
-        
-        {/* Zero label */}
-        <text x={rightX + 5} y={centerY + (maxDiameter * scale / 2) + 35} fontSize="12" fill="#000000">
-          0
-        </text>
-        
-        {/* Length dimension */}
-        {maxDepth > 0 && (
-          <g>
-            {/* Dimension line */}
-            <line 
-              x1={leftX} 
-              y1={centerY + (maxDiameter * scale / 2) + 20} 
-              x2={rightX} 
-              y2={centerY + (maxDiameter * scale / 2) + 20} 
-              stroke="#000000" 
-              strokeWidth="1"
-            />
-            {/* Left arrow */}
-            <line 
-              x1={leftX} 
-              y1={centerY + (maxDiameter * scale / 2) + 15} 
-              x2={leftX} 
-              y2={centerY + (maxDiameter * scale / 2) + 25} 
-              stroke="#000000" 
-              strokeWidth="1"
-            />
-            {/* Right arrow */}
-            <line 
-              x1={rightX} 
-              y1={centerY + (maxDiameter * scale / 2) + 15} 
-              x2={rightX} 
-              y2={centerY + (maxDiameter * scale / 2) + 25} 
-              stroke="#000000" 
-              strokeWidth="1"
-            />
-            {/* Dimension text */}
-            <text 
-              x={(leftX + rightX) / 2} 
-              y={centerY + (maxDiameter * scale / 2) + 35} 
-              textAnchor="middle" 
-              fontSize="10" 
-              fill="#000000"
-            >
-              {maxDepth.toFixed(3)}&quot;
-            </text>
-          </g>
-        )}
-        
-        {/* Diameter dimension */}
-        {maxDiameter > 0 && (
-          <g>
-            {/* Vertical dimension line */}
-            <line 
-              x1={leftX - 20} 
-              y1={centerY - (maxDiameter * scale / 2)} 
-              x2={leftX - 20} 
-              y2={centerY + (maxDiameter * scale / 2)} 
-              stroke="#000000" 
-              strokeWidth="1"
-            />
-            {/* Top arrow */}
-            <line 
-              x1={leftX - 25} 
-              y1={centerY - (maxDiameter * scale / 2)} 
-              x2={leftX - 15} 
-              y2={centerY - (maxDiameter * scale / 2)} 
-              stroke="#000000" 
-              strokeWidth="1"
-            />
-            {/* Bottom arrow */}
-            <line 
-              x1={leftX - 25} 
-              y1={centerY + (maxDiameter * scale / 2)} 
-              x2={leftX - 15} 
-              y2={centerY + (maxDiameter * scale / 2)} 
-              stroke="#000000" 
-              strokeWidth="1"
-            />
-            {/* Diameter symbol and text */}
-            <text 
-              x={leftX - 35} 
-              y={centerY + 3} 
-              textAnchor="middle" 
-              fontSize="10" 
-              fill="#000000"
-            >
-              ⌀{maxDiameter.toFixed(3)}&quot;
-            </text>
-          </g>
-        )}
-        
-        {/* Exposed length dimension if different from total */}
-        {spec.exposedLength && parseValue(spec.exposedLength) !== maxDepth && (
-          <g>
-            <line 
-              x1={rightX - parseValue(spec.exposedLength) * scale} 
-              y1={centerY + (maxDiameter * scale / 2) + 5} 
-              x2={rightX} 
-              y2={centerY + (maxDiameter * scale / 2) + 5} 
-              stroke="#000000" 
-              strokeWidth="1"
-            />
-            <line 
-              x1={rightX - parseValue(spec.exposedLength) * scale} 
-              y1={centerY + (maxDiameter * scale / 2) + 2} 
-              x2={rightX - parseValue(spec.exposedLength) * scale} 
-              y2={centerY + (maxDiameter * scale / 2) + 8} 
-              stroke="#000000" 
-              strokeWidth="1"
-            />
-            <line 
-              x1={rightX} 
-              y1={centerY + (maxDiameter * scale / 2) + 2} 
-              x2={rightX} 
-              y2={centerY + (maxDiameter * scale / 2) + 8} 
-              stroke="#000000" 
-              strokeWidth="1"
-            />
-            <text 
-              x={rightX - parseValue(spec.exposedLength) * scale / 2} 
-              y={centerY + (maxDiameter * scale / 2) + 18} 
-              textAnchor="middle" 
-              fontSize="9" 
-              fill="#000000"
-            >
-              Exposed: {spec.exposedLength}&quot;
-            </text>
-          </g>
-        )}
-        
-        {/* Drill depth dimensions */}
-        {spec.machiningSteps.map((step, index) => {
-          if (step.process === 'Drill' && step.depth) {
-            const drillDepth = parseValue(step.depth) * scale;
-            const yOffset = -20 - (index * 15);
-            return (
-              <g key={step.id}>
-                <line 
-                  x1={rightX - drillDepth} 
-                  y1={centerY + yOffset} 
-                  x2={rightX} 
-                  y2={centerY + yOffset} 
-                  stroke="#000000" 
-                  strokeWidth="1"
-                />
-                <line 
-                  x1={rightX - drillDepth} 
-                  y1={centerY + yOffset - 3} 
-                  x2={rightX - drillDepth} 
-                  y2={centerY + yOffset + 3} 
-                  stroke="#000000" 
-                  strokeWidth="1"
-                />
-                <text 
-                  x={rightX - drillDepth / 2} 
-                  y={centerY + yOffset - 5} 
-                  textAnchor="middle" 
-                  fontSize="8" 
-                  fill="#000000"
-                >
-                  {step.process} ⌀{step.size}&quot; × {step.depth}&quot;
-                </text>
-              </g>
-            );
-          }
-          return null;
-        })}
-      </svg>
-      
-      {/* Legend */}
-      <div className="mt-3 text-xs text-slate-600 dark:text-slate-400">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-1 bg-red-400 opacity-30"></div>
-            <span>Drilled holes</span>
+
+              {/* Cross-hatching for machined areas - starting from zero */}
+              {profile.map((segment, index) => {
+                if (segment.type !== 'solid') {
+                  const segmentStartX = rightX - (segment.startDepth * scale);
+                  const segmentEndX = rightX - (segment.endDepth * scale);
+                  const innerRadius = segment.radius * scale;
+                  const outerRadius = (segment.outerRadius || maxDiameter / 2) * scale;
+                  const segmentWidth = segmentStartX - segmentEndX;
+                  
+                  // Add cross-hatch pattern to show removed material
+                  const hatchLines = [];
+                  for (let i = 0; i < segmentWidth; i += 12 * zoom) {
+                    // Top material removal
+                    hatchLines.push(
+                      <line
+                        key={`hatch-top-${index}-${i}`}
+                        x1={segmentEndX + i}
+                        y1={centerY - outerRadius}
+                        x2={segmentEndX + i + (8 * zoom)}
+                        y2={centerY - innerRadius}
+                        stroke="#000000"
+                        strokeWidth="0.5"
+                        opacity="0.4"
+                      />
+                    );
+                    // Bottom material removal
+                    hatchLines.push(
+                      <line
+                        key={`hatch-bottom-${index}-${i}`}
+                        x1={segmentEndX + i}
+                        y1={centerY + innerRadius}
+                        x2={segmentEndX + i + (8 * zoom)}
+                        y2={centerY + outerRadius}
+                        stroke="#000000"
+                        strokeWidth="0.5"
+                        opacity="0.4"
+                      />
+                    );
+                  }
+                  return <g key={`hatch-segment-${index}`}>{hatchLines}</g>;
+                }
+                return null;
+              })}
+
+              {/* Center line */}
+              <line
+                x1={leftX - 30}
+                y1={centerY}
+                x2={rightX + 30}
+                y2={centerY}
+                stroke="#000000"
+                strokeWidth="0.5"
+                strokeDasharray="8,8"
+              />
+              
+              {/* Zero reference line at right */}
+              <line
+                x1={rightX}
+                y1={centerY - (maxDiameter * scale / 2) - 20}
+                x2={rightX}
+                y2={centerY + (maxDiameter * scale / 2) + 60}
+                stroke="#000000"
+                strokeWidth="1"
+              />
+              
+              {/* Zero label */}
+              <text x={rightX + 8} y={centerY + (maxDiameter * scale / 2) + 50} fontSize="16" fill="#000000">
+                0
+              </text>
+
+              {/* Dimensions */}
+              {maxDepth > 0 && (
+                <g>
+                  {/* Length dimension */}
+                  <line 
+                    x1={leftX} 
+                    y1={centerY + (maxDiameter * scale / 2) + 30} 
+                    x2={rightX} 
+                    y2={centerY + (maxDiameter * scale / 2) + 30} 
+                    stroke="#000000" 
+                    strokeWidth="1"
+                  />
+                  <line 
+                    x1={leftX} 
+                    y1={centerY + (maxDiameter * scale / 2) + 25} 
+                    x2={leftX} 
+                    y2={centerY + (maxDiameter * scale / 2) + 35} 
+                    stroke="#000000" 
+                    strokeWidth="1"
+                  />
+                  <line 
+                    x1={rightX} 
+                    y1={centerY + (maxDiameter * scale / 2) + 25} 
+                    x2={rightX} 
+                    y2={centerY + (maxDiameter * scale / 2) + 35} 
+                    stroke="#000000" 
+                    strokeWidth="1"
+                  />
+                  <text 
+                    x={(leftX + rightX) / 2} 
+                    y={centerY + (maxDiameter * scale / 2) + 50} 
+                    textAnchor="middle" 
+                    fontSize="14" 
+                    fill="#000000"
+                  >
+                    {maxDepth.toFixed(3)}&quot;
+                  </text>
+                </g>
+              )}
+            </svg>
           </div>
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-1 border border-slate-600"></div>
-            <span>Pin outline</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-px bg-green-600"></div>
-            <span>Dimensions</span>
-          </div>
+        </div>
+
+        {/* Machining Steps List */}
+        <div className="border-t border-slate-200 p-4 bg-slate-50 max-h-48 overflow-y-auto">
+          <h3 className="font-semibold text-slate-900 mb-3">Machining Steps</h3>
+          {spec.machiningSteps.length > 0 ? (
+            <div className="space-y-2">
+              {spec.machiningSteps.map((step, index) => (
+                <div key={step.id} className="flex items-center gap-4 p-2 bg-white rounded border border-slate-200">
+                  <span className="font-medium text-slate-600 w-8">{index + 1}.</span>
+                  <span className="font-medium text-slate-900">{step.process}</span>
+                  {step.size && <span className="text-slate-600">⌀{step.size}&quot;</span>}
+                  {step.depth && <span className="text-slate-600">× {step.depth}&quot;</span>}
+                  {step.threadSize && <span className="text-slate-600">Thread: {step.threadSize}</span>}
+                  {step.finalDiameter && <span className="text-slate-600">Final ⌀{step.finalDiameter}&quot;</span>}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-slate-500 italic">No machining steps defined.</p>
+          )}
         </div>
       </div>
     </div>
+  );
+};
+
+// Technical Drawing Component (Thumbnail)
+const TechnicalDrawing = ({ spec }: { spec: PinSpec }) => {
+  const [showModal, setShowModal] = useState(false);
+
+  return (
+    <>
+      <div className="mt-4">
+        <h4 className="text-sm font-medium text-slate-900 mb-2">Technical Drawing</h4>
+        <div 
+          className="border border-slate-200 rounded-lg p-4 bg-slate-50 cursor-pointer hover:bg-slate-100 transition-colors"
+          onClick={() => setShowModal(true)}
+        >
+          <svg width="240" height="120" className="bg-white border border-slate-200">
+            {/* Simplified thumbnail view */}
+            <g>
+              {/* Basic outline for thumbnail */}
+              <rect
+                x="40"
+                y="40"
+                width="160"
+                height="40"
+                fill="none"
+                stroke="#000000"
+                strokeWidth="2"
+              />
+              
+              {/* Show some basic machining indication */}
+              {spec.machiningSteps.length > 0 && (
+                <>
+                  <rect
+                    x="160"
+                    y="50"
+                    width="30"
+                    height="20"
+                    fill="none"
+                    stroke="#000000"
+                    strokeWidth="1"
+                  />
+                  <line
+                    x1="175"
+                    y1="50"
+                    x2="180"
+                    y2="60"
+                    stroke="#000000"
+                    strokeWidth="0.5"
+                    opacity="0.5"
+                  />
+                </>
+              )}
+              
+              {/* Center line */}
+              <line
+                x1="30"
+                y1="60"
+                x2="210"
+                y2="60"
+                stroke="#000000"
+                strokeWidth="0.5"
+                strokeDasharray="4,4"
+              />
+              
+              {/* Zero reference */}
+              <line
+                x1="200"
+                y1="30"
+                x2="200"
+                y2="90"
+                stroke="#000000"
+                strokeWidth="1"
+              />
+              <text x="203" y="88" fontSize="10" fill="#000000">0</text>
+            </g>
+          </svg>
+          <p className="text-xs text-slate-600 mt-2 text-center">Click to view detailed drawing</p>
+        </div>
+      </div>
+      
+      <TechnicalDrawingModal 
+        spec={spec} 
+        isOpen={showModal} 
+        onClose={() => setShowModal(false)} 
+      />
+    </>
   );
 };
 
@@ -636,6 +655,12 @@ export default function PinsPage() {
           createdAt: Timestamp.now()
         });
         console.log('Pin added to Firebase with ID:', docRef.id);
+        
+        // Update the currentSpec with the Firebase-generated ID
+        setCurrentSpec(prevSpec => ({
+          ...prevSpec,
+          id: docRef.id
+        }));
       }
 
       await fetchPins(); // Refresh the list
