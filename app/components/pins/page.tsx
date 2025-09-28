@@ -1017,13 +1017,20 @@ export default function PinsPage() {
                             <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
                               Thread Size
                             </label>
-                            <input
-                              type="text"
+                            <select
                               value={step.threadSize || ''}
                               onChange={(e) => updateMachiningStep(index, 'threadSize', e.target.value)}
                               className="w-full px-2 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded focus:ring-1 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
-                              placeholder="e.g., 10-32, M6x1.0"
-                            />
+                            >
+                              <option value="">Select thread size...</option>
+                              <option value="3/8-10">3/8-10</option>
+                              <option value="5/16-14">5/16-14</option>
+                              <option value="5/16-18">5/16-18</option>
+                              <option value="Radial">Radial</option>
+                              <option value="7/16-14">7/16-14</option>
+                              <option value="1/2-13">1/2-13</option>
+                              <option value="m16-1.5">m16-1.5</option>
+                            </select>
                           </div>
                         )}
                         
