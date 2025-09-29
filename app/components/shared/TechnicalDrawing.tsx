@@ -103,7 +103,19 @@ function TechnicalDrawingSVG({ spec, isModal }: { spec: BaseSpec & { exposedLeng
   
   // Calculate extra space needed for dimensions and labels
   const leftPadding = hasDiameter ? (isModal ? 100 : 30) : (isModal ? 50 : 15);
-  const rightPadding = ('length' in spec && spec.length) ? (isModal ? 80 : 50) : (isModal ? 60 : 25);
+  
+  // Calculate additional space needed for exposed length
+  let exposedLengthSpace = 0;
+  if ('exposedLength' in spec && spec.exposedLength) {
+    const exposedLengthDimension = parseDimensionWithUnit(spec.exposedLength);
+    const exposedLengthInches = convertToInches(exposedLengthDimension);
+    exposedLengthSpace = exposedLengthInches * scale + (isModal ? 60 : 40); // Extra space for dimensions
+  }
+  
+  const rightPadding = Math.max(
+    ('length' in spec && spec.length) ? (isModal ? 80 : 50) : (isModal ? 60 : 25),
+    exposedLengthSpace
+  );
   const topPadding = ('length' in spec && spec.length) ? (isModal ? 80 : 30) : (isModal ? 30 : 10);
   const bottomPadding = isModal ? 150 : 30;
   
@@ -314,6 +326,70 @@ function TechnicalDrawingSVG({ spec, isModal }: { spec: BaseSpec & { exposedLeng
           return <g key="tap-threads">{threadLines}</g>;
         })()}
       </g>
+      
+      {/* Exposed length visualization for pins */}
+      {('exposedLength' in spec && spec.exposedLength) ? (
+        <g>
+          {(() => {
+            const exposedLengthDimension = parseDimensionWithUnit(spec.exposedLength);
+            const exposedLengthInches = convertToInches(exposedLengthDimension);
+            const exposedLengthPixels = exposedLengthInches * scale;
+            const exposedDiameter = 0.25; // 0.25" diameter for exposed portion
+            const exposedRadiusPixels = (exposedDiameter / 2) * scale;
+            
+            const exposedStartX = rightX;
+            const exposedEndX = rightX + exposedLengthPixels;
+            
+            return (
+              <>
+                {/* Exposed portion outline (dotted) */}
+                <line 
+                  x1={exposedStartX} y1={adjustedCenterY - exposedRadiusPixels} 
+                  x2={exposedEndX} y2={adjustedCenterY - exposedRadiusPixels} 
+                  stroke="#666666" strokeWidth={strokeWidth} strokeDasharray={isModal ? "4,4" : "2,2"}
+                />
+                <line 
+                  x1={exposedStartX} y1={adjustedCenterY + exposedRadiusPixels} 
+                  x2={exposedEndX} y2={adjustedCenterY + exposedRadiusPixels} 
+                  stroke="#666666" strokeWidth={strokeWidth} strokeDasharray={isModal ? "4,4" : "2,2"}
+                />
+                {/* End cap for exposed portion */}
+                <line 
+                  x1={exposedEndX} y1={adjustedCenterY - exposedRadiusPixels} 
+                  x2={exposedEndX} y2={adjustedCenterY + exposedRadiusPixels} 
+                  stroke="#666666" strokeWidth={strokeWidth} strokeDasharray={isModal ? "4,4" : "2,2"}
+                />
+                {/* Exposed length dimension line */}
+                <line 
+                  x1={exposedStartX} y1={adjustedCenterY + exposedRadiusPixels + (isModal ? 15 : 8)} 
+                  x2={exposedEndX} y2={adjustedCenterY + exposedRadiusPixels + (isModal ? 15 : 8)} 
+                  stroke="#9333ea" strokeWidth={isModal ? 2 : 0.8}
+                />
+                {/* Extension lines for exposed length */}
+                <line 
+                  x1={exposedStartX} y1={adjustedCenterY + exposedRadiusPixels} 
+                  x2={exposedStartX} y2={adjustedCenterY + exposedRadiusPixels + (isModal ? 20 : 12)} 
+                  stroke="#9333ea" strokeWidth={isModal ? 1 : 0.5} strokeDasharray={isModal ? "3,3" : "2,2"}
+                />
+                <line 
+                  x1={exposedEndX} y1={adjustedCenterY + exposedRadiusPixels} 
+                  x2={exposedEndX} y2={adjustedCenterY + exposedRadiusPixels + (isModal ? 20 : 12)} 
+                  stroke="#9333ea" strokeWidth={isModal ? 1 : 0.5} strokeDasharray={isModal ? "3,3" : "2,2"}
+                />
+                {/* Exposed length label */}
+                <text 
+                  x={(exposedStartX + exposedEndX) / 2} y={adjustedCenterY + exposedRadiusPixels + (isModal ? 35 : 20)} 
+                  textAnchor="middle" fontSize={isModal ? 14 : 6} fontWeight="bold" fill="#9333ea"
+                >
+                  {(() => {
+                    return isModal ? formatDimension(exposedLengthDimension) : spec.exposedLength;
+                  })()} exposed
+                </text>
+              </>
+            );
+          })()}
+        </g>
+      ) : null}
       
       {/* Left end cap */}
       <line 
@@ -565,7 +641,19 @@ export default function TechnicalDrawing({ spec }: TechnicalDrawingProps) {
       
       // Calculate extra space needed for dimensions and labels
       const leftPadding = hasDiameter ? 120 : 80;
-      const rightPadding = ('length' in spec && spec.length) ? 100 : 80;
+      
+      // Calculate additional space needed for exposed length
+      let exposedLengthSpace = 0;
+      if ('exposedLength' in spec && spec.exposedLength) {
+        const exposedLengthDimension = parseDimensionWithUnit(spec.exposedLength);
+        const exposedLengthInches = convertToInches(exposedLengthDimension);
+        exposedLengthSpace = exposedLengthInches * scale + 80; // Extra space for dimensions
+      }
+      
+      const rightPadding = Math.max(
+        ('length' in spec && spec.length) ? 100 : 80,
+        exposedLengthSpace
+      );
       const topPadding = ('length' in spec && spec.length) ? 100 : 50;
       const bottomPadding = 180;
       
@@ -693,6 +781,35 @@ export default function TechnicalDrawing({ spec }: TechnicalDrawingProps) {
             `;
           }
         });
+      }
+      
+      // Exposed length visualization for pins
+      if ('exposedLength' in spec && spec.exposedLength) {
+        const exposedLengthDimension = parseDimensionWithUnit(spec.exposedLength);
+        const exposedLengthInches = convertToInches(exposedLengthDimension);
+        const exposedLengthPixels = exposedLengthInches * scale;
+        const exposedDiameter = 0.25; // 0.25" diameter for exposed portion
+        const exposedRadiusPixels = (exposedDiameter / 2) * scale;
+        
+        const exposedStartX = rightX;
+        const exposedEndX = rightX + exposedLengthPixels;
+        
+        // Exposed portion outline (dotted)
+        svgContent += `<line x1="${exposedStartX}" y1="${adjustedCenterY - exposedRadiusPixels}" x2="${exposedEndX}" y2="${adjustedCenterY - exposedRadiusPixels}" stroke="#666666" stroke-width="${strokeWidth}" stroke-dasharray="4,4"/>`;
+        svgContent += `<line x1="${exposedStartX}" y1="${adjustedCenterY + exposedRadiusPixels}" x2="${exposedEndX}" y2="${adjustedCenterY + exposedRadiusPixels}" stroke="#666666" stroke-width="${strokeWidth}" stroke-dasharray="4,4"/>`;
+        
+        // End cap for exposed portion
+        svgContent += `<line x1="${exposedEndX}" y1="${adjustedCenterY - exposedRadiusPixels}" x2="${exposedEndX}" y2="${adjustedCenterY + exposedRadiusPixels}" stroke="#666666" stroke-width="${strokeWidth}" stroke-dasharray="4,4"/>`;
+        
+        // Exposed length dimension line
+        svgContent += `<line x1="${exposedStartX}" y1="${adjustedCenterY + exposedRadiusPixels + 15}" x2="${exposedEndX}" y2="${adjustedCenterY + exposedRadiusPixels + 15}" stroke="#9333ea" stroke-width="2"/>`;
+        
+        // Extension lines for exposed length
+        svgContent += `<line x1="${exposedStartX}" y1="${adjustedCenterY + exposedRadiusPixels}" x2="${exposedStartX}" y2="${adjustedCenterY + exposedRadiusPixels + 20}" stroke="#9333ea" stroke-width="1" stroke-dasharray="3,3"/>`;
+        svgContent += `<line x1="${exposedEndX}" y1="${adjustedCenterY + exposedRadiusPixels}" x2="${exposedEndX}" y2="${adjustedCenterY + exposedRadiusPixels + 20}" stroke="#9333ea" stroke-width="1" stroke-dasharray="3,3"/>`;
+        
+        // Exposed length label
+        svgContent += `<text x="${(exposedStartX + exposedEndX) / 2}" y="${adjustedCenterY + exposedRadiusPixels + 35}" text-anchor="middle" font-size="14" font-weight="bold" fill="#9333ea">${formatDimension(exposedLengthDimension)} exposed</text>`;
       }
       
       // Left end cap
