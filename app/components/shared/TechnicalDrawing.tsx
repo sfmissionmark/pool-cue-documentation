@@ -900,7 +900,7 @@ export default function TechnicalDrawing({ spec }: TechnicalDrawingProps) {
               </div>
               ${spec.diameter ? `
                 <div class="spec-item material-diameter">
-                  <span class="spec-label">Finished Joint Diameter:</span> ⌀${formatDimension(parseDimensionWithUnit(spec.diameter))}
+                  <span class="spec-label">${'length' in spec && 'material' in spec ? 'Diameter' : 'Finished Joint Diameter'}:</span> ⌀${formatDimension(parseDimensionWithUnit(spec.diameter))}
                 </div>
               ` : ''}
               ${(spec as any).length ? `
