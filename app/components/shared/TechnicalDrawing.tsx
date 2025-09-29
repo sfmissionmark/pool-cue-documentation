@@ -103,7 +103,7 @@ function TechnicalDrawingSVG({ spec, isModal }: { spec: BaseSpec & { exposedLeng
   
   // Calculate extra space needed for dimensions and labels
   const leftPadding = hasDiameter ? (isModal ? 100 : 30) : (isModal ? 50 : 15);
-  const rightPadding = isModal ? 50 : 15;
+  const rightPadding = ('length' in spec && spec.length) ? (isModal ? 80 : 50) : (isModal ? 60 : 25);
   const topPadding = ('length' in spec && spec.length) ? (isModal ? 80 : 30) : (isModal ? 30 : 10);
   const bottomPadding = isModal ? 150 : 30;
   
@@ -565,7 +565,7 @@ export default function TechnicalDrawing({ spec }: TechnicalDrawingProps) {
       
       // Calculate extra space needed for dimensions and labels
       const leftPadding = hasDiameter ? 120 : 80;
-      const rightPadding = 80;
+      const rightPadding = ('length' in spec && spec.length) ? 100 : 80;
       const topPadding = ('length' in spec && spec.length) ? 100 : 50;
       const bottomPadding = 180;
       

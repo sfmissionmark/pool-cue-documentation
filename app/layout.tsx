@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Cue Component Documentation - Butler Cues",
-  description: "Documentation system for pool cue components including ferrules and pins",
+  title: "Cue Part Documentation - Butler Cues",
+  description: "Documentation system for pool cue parts including ferrules and pins",
 };
 
 export default function RootLayout({
@@ -49,7 +49,7 @@ export default function RootLayout({
               {/* Title */}
               <div className="flex-1 text-center">
                 <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-                  Cue Component Documentation
+                  Cue Part Documentation
                 </h1>
               </div>
               
