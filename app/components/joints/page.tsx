@@ -4,45 +4,38 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { getFirestore, isFirebaseConfigured } from '@/lib/firebase';
 import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, query, orderBy, Timestamp } from 'firebase/firestore';
-import { PinSpec } from '@/app/components/shared/types';
+import { JointSpec } from '@/app/components/shared/types';
 
 import MachiningStepsEditor from '@/app/components/shared/MachiningStepsEditor';
 import TechnicalDrawing from '@/app/components/shared/TechnicalDrawing';
 import SpecificationCard from '@/app/components/shared/SpecificationCard';
 import SearchFilter from '@/app/components/shared/SearchFilter';
 
-export default function PinsPage() {
-  const [specs, setSpecs] = useState<PinSpec[]>([]);
-  const [filteredSpecs, setFilteredSpecs] = useState<PinSpec[]>([]);
+export default function JointsPage() {
+  const [specs, setSpecs] = useState<JointSpec[]>([]);
+  const [filteredSpecs, setFilteredSpecs] = useState<JointSpec[]>([]);
   const [isEditing, setIsEditing] = useState(false);
-  const [currentSpec, setCurrentSpec] = useState<PinSpec>({
+  const [currentSpec, setCurrentSpec] = useState<JointSpec>({
     id: '',
     name: '',
+    diameter: '',
     manufacture: '',
     machiningSteps: [],
     assemblyNotes: '',
-    exposedLength: ''
+    hasInsert: false,
+    insertMaterial: ''
   });
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [databaseError, setDatabaseError] = useState<string | null>(null);
 
-  // Fetch pins from database on component mount
+  // Fetch joints from database on component mount
   useEffect(() => {
-    fetchPins();
-    
-    // Set up periodic refresh to sync changes - DISABLED to avoid CORS issues
-    // const refreshInterval = setInterval(() => {
-    //   if (isFirebaseConfigured()) {
-    //     fetchPins();
-    //   }
-    // }, 30000); // Refresh every 30 seconds
-
-    // return () => clearInterval(refreshInterval);
+    fetchJoints();
   }, []);
 
-  const fetchPins = async () => {
+  const fetchJoints = async () => {
     if (!isFirebaseConfigured()) {
       setLoading(false);
       setDatabaseError('Firebase is not configured. Please check your configuration.');
@@ -57,30 +50,32 @@ export default function PinsPage() {
         return;
       }
       
-      const pinsCollection = collection(db, 'pins');
-      const pinsQuery = query(pinsCollection, orderBy('name'));
-      const querySnapshot = await getDocs(pinsQuery);
+      const jointsCollection = collection(db, 'joints');
+      const jointsQuery = query(jointsCollection, orderBy('name'));
+      const querySnapshot = await getDocs(jointsQuery);
       
-      const pinsData: PinSpec[] = [];
+      const jointsData: JointSpec[] = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        // Migrate machining steps to ensure backward compatibility
+        // Migrate machining steps and insert fields to ensure backward compatibility
         const migratedData = {
           ...data,
-          machiningSteps: data.machiningSteps || []
+          machiningSteps: data.machiningSteps || [],
+          hasInsert: data.hasInsert ?? false,
+          insertMaterial: data.insertMaterial || ''
         };
-        pinsData.push({
+        jointsData.push({
           id: doc.id,
           ...migratedData
-        } as PinSpec);
+        } as JointSpec);
       });
       
-      setSpecs(pinsData);
-      setFilteredSpecs(pinsData);
+      setSpecs(jointsData);
+      setFilteredSpecs(jointsData);
       setDatabaseError(null);
     } catch (error) {
-      console.error('Error fetching pins:', error);
-      setDatabaseError('Failed to load pins from database.');
+      console.error('Error fetching joints:', error);
+      setDatabaseError('Failed to load joints from database.');
     } finally {
       setLoading(false);
     }
@@ -88,12 +83,12 @@ export default function PinsPage() {
 
   const handleSave = async () => {
     if (!currentSpec.name.trim()) {
-      alert('Please enter a pin name');
+      alert('Please enter a joint name');
       return;
     }
 
     if (!isFirebaseConfigured()) {
-      setDatabaseError('Firebase is not configured. Cannot save pins.');
+      setDatabaseError('Firebase is not configured. Cannot save joints.');
       return;
     }
 
@@ -107,45 +102,49 @@ export default function PinsPage() {
       }
       
       if (currentSpec.id) {
-        // Update existing pin
-        await updateDoc(doc(db, 'pins', currentSpec.id), {
+        // Update existing joint
+        await updateDoc(doc(db, 'joints', currentSpec.id), {
           name: currentSpec.name,
+          diameter: currentSpec.diameter,
           manufacture: currentSpec.manufacture,
-          exposedLength: currentSpec.exposedLength,
           machiningSteps: currentSpec.machiningSteps,
           assemblyNotes: currentSpec.assemblyNotes,
+          hasInsert: currentSpec.hasInsert,
+          insertMaterial: currentSpec.insertMaterial,
           updatedAt: Timestamp.now()
         });
       } else {
-        // Add new pin
-        await addDoc(collection(db, 'pins'), {
+        // Add new joint
+        await addDoc(collection(db, 'joints'), {
           name: currentSpec.name,
+          diameter: currentSpec.diameter,
           manufacture: currentSpec.manufacture,
-          exposedLength: currentSpec.exposedLength,
           machiningSteps: currentSpec.machiningSteps,
           assemblyNotes: currentSpec.assemblyNotes,
+          hasInsert: currentSpec.hasInsert,
+          insertMaterial: currentSpec.insertMaterial,
           createdAt: Timestamp.now(),
           updatedAt: Timestamp.now()
         });
       }
       
       handleCancel();
-      await fetchPins(); // Refresh the list
+      await fetchJoints(); // Refresh the list
       setDatabaseError(null);
     } catch (error) {
-      console.error('Error saving pin:', error);
-      setDatabaseError('Failed to save pin to database.');
+      console.error('Error saving joint:', error);
+      setDatabaseError('Failed to save joint to database.');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleEdit = (spec: PinSpec) => {
+  const handleEdit = (spec: JointSpec) => {
     setCurrentSpec(spec);
     setIsEditing(true);
   };
 
-  const handleDuplicate = (spec: PinSpec) => {
+  const handleDuplicate = (spec: JointSpec) => {
     setCurrentSpec({
       ...spec,
       id: '', // Clear ID for new record
@@ -155,12 +154,12 @@ export default function PinsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this pin?')) {
+    if (!confirm('Are you sure you want to delete this joint?')) {
       return;
     }
 
     if (!isFirebaseConfigured()) {
-      setDatabaseError('Firebase is not configured. Cannot delete pins.');
+      setDatabaseError('Firebase is not configured. Cannot delete joints.');
       return;
     }
 
@@ -171,12 +170,12 @@ export default function PinsPage() {
         return;
       }
       
-      await deleteDoc(doc(db, 'pins', id));
-      await fetchPins(); // Refresh the list
+      await deleteDoc(doc(db, 'joints', id));
+      await fetchJoints(); // Refresh the list
       setDatabaseError(null);
     } catch (error) {
-      console.error('Error deleting pin:', error);
-      setDatabaseError('Failed to delete pin from database.');
+      console.error('Error deleting joint:', error);
+      setDatabaseError('Failed to delete joint from database.');
     }
   };
 
@@ -184,10 +183,12 @@ export default function PinsPage() {
     setCurrentSpec({
       id: '',
       name: '',
+      diameter: '',
       manufacture: '',
-      exposedLength: '',
       machiningSteps: [],
-      assemblyNotes: ''
+      assemblyNotes: '',
+      hasInsert: false,
+      insertMaterial: ''
     });
     setIsEditing(false);
   };
@@ -197,7 +198,7 @@ export default function PinsPage() {
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-slate-600 dark:text-slate-400">Loading pins...</p>
+          <p className="text-slate-600 dark:text-slate-400">Loading joints...</p>
         </div>
       </div>
     );
@@ -219,15 +220,15 @@ export default function PinsPage() {
           
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Pin Documentation</h1>
-              <p className="text-slate-600 dark:text-slate-400 mt-2">Document pin specifications, machining steps, and assembly notes</p>
+              <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Joint Documentation</h1>
+              <p className="text-slate-600 dark:text-slate-400 mt-2">Document joint specifications, machining steps, and assembly notes</p>
             </div>
             
             <button
               onClick={() => setIsEditing(true)}
               className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
             >
-              New Pin
+              New Joint
             </button>
           </div>
         </div>
@@ -241,7 +242,7 @@ export default function PinsPage() {
         {isEditing && (
           <div className="mb-8 bg-white dark:bg-slate-800 rounded-lg p-6 border border-slate-200 dark:border-slate-600">
             <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-6">
-              {currentSpec.id ? 'Edit Pin' : 'New Pin'}
+              {currentSpec.id ? 'Edit Joint' : 'New Joint'}
             </h2>
 
             <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} className="space-y-6">
@@ -249,14 +250,14 @@ export default function PinsPage() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    Pin Name *
+                    Joint Name *
                   </label>
                   <input
                     type="text"
                     value={currentSpec.name}
                     onChange={(e) => setCurrentSpec({ ...currentSpec, name: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
-                    placeholder="e.g., Standard Joint Pin, Custom Pilot Pin"
+                    placeholder="e.g., 5/16-18 Pin Joint, 3/8-10 Pin Joint"
                     required
                   />
                 </div>
@@ -275,17 +276,50 @@ export default function PinsPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  Exposed Length
-                </label>
-                <input
-                  type="text"
-                  value={currentSpec.exposedLength || ''}
-                  onChange={(e) => setCurrentSpec({ ...currentSpec, exposedLength: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
-                  placeholder="e.g., 0.875, 7/8"
-                />
+              <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    Finished Joint Diameter
+                  </label>
+                  <input
+                    type="text"
+                    value={currentSpec.diameter}
+                    onChange={(e) => setCurrentSpec({ ...currentSpec, diameter: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                    placeholder="e.g., 0.500, 1/2"
+                  />
+                </div>
+              </div>
+
+              {/* Insert Options */}
+              <div className="space-y-4">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="hasInsert"
+                    checked={currentSpec.hasInsert}
+                    onChange={(e) => setCurrentSpec({ ...currentSpec, hasInsert: e.target.checked, insertMaterial: e.target.checked ? currentSpec.insertMaterial : '' })}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300 rounded"
+                  />
+                  <label htmlFor="hasInsert" className="ml-2 block text-sm text-slate-700 dark:text-slate-300">
+                    Has Insert
+                  </label>
+                </div>
+
+                {currentSpec.hasInsert && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      Insert Material
+                    </label>
+                    <input
+                      type="text"
+                      value={currentSpec.insertMaterial || ''}
+                      onChange={(e) => setCurrentSpec({ ...currentSpec, insertMaterial: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                      placeholder="e.g., Brass, Stainless Steel, Phenolic"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Machining Steps and Technical Drawing */}
@@ -294,12 +328,12 @@ export default function PinsPage() {
                 <div className="lg:col-span-2">
                   <MachiningStepsEditor
                     spec={currentSpec}
-                    onUpdate={(updatedSpec) => setCurrentSpec(updatedSpec as PinSpec)}
+                    onUpdate={(updatedSpec) => setCurrentSpec(updatedSpec as JointSpec)}
                   />
                 </div>
                 
                 {/* Technical Drawing - Right Side */}
-                {(currentSpec.machiningSteps.length > 0 || currentSpec.exposedLength) && (
+                {(currentSpec.machiningSteps.length > 0 || currentSpec.diameter) && (
                   <div className="lg:col-span-1">
                     <TechnicalDrawing spec={currentSpec} />
                   </div>
@@ -327,7 +361,7 @@ export default function PinsPage() {
                   disabled={saving}
                   className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-6 py-2 rounded-lg font-medium transition-colors"
                 >
-                  {saving ? 'Saving...' : (currentSpec.id ? 'Update Pin' : 'Save Pin')}
+                  {saving ? 'Saving...' : (currentSpec.id ? 'Update Joint' : 'Save Joint')}
                 </button>
                 <button
                   type="button"
@@ -341,7 +375,7 @@ export default function PinsPage() {
           </div>
         )}
 
-        {/* Pins List */}
+        {/* Joints List */}
         <div className="space-y-6">
           
           {specs.length === 0 ? (
@@ -351,13 +385,13 @@ export default function PinsPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                 </svg>
               </div>
-              <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-2">No pins documented yet</h3>
-              <p className="text-slate-600 dark:text-slate-400 mb-4">Start by creating your first pin specification</p>
+              <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-2">No joints documented yet</h3>
+              <p className="text-slate-600 dark:text-slate-400 mb-4">Start by creating your first joint specification</p>
               <button
                 onClick={() => setIsEditing(true)}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
               >
-                Create First Pin
+                Create First Joint
               </button>
             </div>
           ) : (
@@ -365,7 +399,7 @@ export default function PinsPage() {
               <SearchFilter
                 items={specs}
                 onFilteredItems={setFilteredSpecs}
-                placeholder="Search pins by name, build style, exposed length..."
+                placeholder="Search joints by name, build style, diameter..."
               />
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {filteredSpecs.map((spec) => (

@@ -1,13 +1,28 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow read/write access to ferrule_specs collection
+    // Allow read/write access to ferrules collection
+    match /ferrules/{document} {
+      allow read, write: if true;
+    }
+    
+    // Allow read/write access to ferrule_specs collection (legacy)
     match /ferrule_specs/{document} {
       allow read, write: if true;
     }
     
     // Allow read/write access to pins collection
     match /pins/{document} {
+      allow read, write: if true;
+    }
+    
+    // Allow read/write access to joints collection
+    match /joints/{document} {
+      allow read, write: if true;
+    }
+    
+    // Allow read/write access to modifications collection
+    match /modifications/{document} {
       allow read, write: if true;
     }
     

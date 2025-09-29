@@ -1,5 +1,5 @@
 import { initializeApp, getApps } from 'firebase/app';
-import { getFirestore as getFirestoreInstance, Firestore } from 'firebase/firestore';
+import { getFirestore as getFirestoreInstance, Firestore, connectFirestoreEmulator } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'placeholder-api-key',
@@ -26,7 +26,8 @@ export function getFirestore(): Firestore | null {
       const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
       firestore = getFirestoreInstance(app);
       
-      // Configure Firestore settings to avoid real-time connection issues
+      // Configure Firestore settings for better development experience
+      // Note: In production, you might want to remove this or use different settings
       console.log('Firebase initialized successfully');
     } catch (error) {
       console.error('Failed to initialize Firebase:', error);

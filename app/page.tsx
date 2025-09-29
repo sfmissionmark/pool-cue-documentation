@@ -12,6 +12,18 @@ const cueComponents = [
     name: "Pins", 
     description: "Document pin build styles, exposed lengths, machining steps, and assembly details",
     icon: "📍"
+  },
+  {
+    id: "joints",
+    name: "Joints",
+    description: "Document joint specifications, machining steps, and assembly notes",
+    icon: "🔗"
+  },
+  {
+    id: "modifications",
+    name: "Modifications",
+    description: "Document cue modifications, custom work, and enhancement procedures",
+    icon: "⚙️"
   }
 ];
 
@@ -22,7 +34,7 @@ export default function Home() {
       <div className="container mx-auto px-4">
        
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-6 max-w-7xl mx-auto">
           {cueComponents.map((component) => (
             <Link
               key={component.id}

@@ -4,50 +4,41 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { getFirestore, isFirebaseConfigured } from '@/lib/firebase';
 import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, query, orderBy, Timestamp } from 'firebase/firestore';
-import { FerruleSpec } from '@/app/components/shared/types';
+import { ModificationSpec } from '@/app/components/shared/types';
 
 import MachiningStepsEditor from '@/app/components/shared/MachiningStepsEditor';
 import TechnicalDrawing from '@/app/components/shared/TechnicalDrawing';
 import SpecificationCard from '@/app/components/shared/SpecificationCard';
 import SearchFilter from '@/app/components/shared/SearchFilter';
 
-export default function FerrulesPage() {
-  const [specs, setSpecs] = useState<FerruleSpec[]>([]);
-  const [filteredSpecs, setFilteredSpecs] = useState<FerruleSpec[]>([]);
+export default function ModificationsPage() {
+  const [specs, setSpecs] = useState<ModificationSpec[]>([]);
+  const [filteredSpecs, setFilteredSpecs] = useState<ModificationSpec[]>([]);
   const [isEditing, setIsEditing] = useState(false);
-  const [currentSpec, setCurrentSpec] = useState<FerruleSpec>({
+  const [currentSpec, setCurrentSpec] = useState<ModificationSpec>({
     id: '',
     name: '',
-    diameter: '',
-    length: '',
-    material: '',
+    description: '',
+    category: 'Other',
+    difficulty: 'Easy',
     manufacture: '',
     machiningSteps: [],
     assemblyNotes: '',
-    vaultPlate: false,
-    vaultPlateMaterial: '',
-    vaultPlateThickness: ''
+    timeEstimate: '',
+    toolsRequired: '',
+    materialsNeeded: ''
   });
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [databaseError, setDatabaseError] = useState<string | null>(null);
 
-  // Fetch ferrules from database on component mount
+  // Fetch modifications from database on component mount
   useEffect(() => {
-    fetchFerrules();
-    
-    // Set up periodic refresh to sync changes - DISABLED to avoid CORS issues
-    // const refreshInterval = setInterval(() => {
-    //   if (isFirebaseConfigured()) {
-    //     fetchFerrules();
-    //   }
-    // }, 30000); // Refresh every 30 seconds
-
-    // return () => clearInterval(refreshInterval);
+    fetchModifications();
   }, []);
 
-  const fetchFerrules = async () => {
+  const fetchModifications = async () => {
     if (!isFirebaseConfigured()) {
       setLoading(false);
       setDatabaseError('Firebase is not configured. Please check your configuration.');
@@ -62,30 +53,35 @@ export default function FerrulesPage() {
         return;
       }
       
-      const ferrulesCollection = collection(db, 'ferrules');
-      const ferrulesQuery = query(ferrulesCollection, orderBy('name'));
-      const querySnapshot = await getDocs(ferrulesQuery);
+      const modificationsCollection = collection(db, 'modifications');
+      const modificationsQuery = query(modificationsCollection, orderBy('name'));
+      const querySnapshot = await getDocs(modificationsQuery);
       
-      const ferrulesData: FerruleSpec[] = [];
+      const modificationsData: ModificationSpec[] = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        // Migrate machining steps to ensure backward compatibility
+        // Migrate fields to ensure backward compatibility
         const migratedData = {
           ...data,
-          machiningSteps: data.machiningSteps || []
+          machiningSteps: data.machiningSteps || [],
+          category: data.category || 'Other',
+          difficulty: data.difficulty || 'Easy',
+          timeEstimate: data.timeEstimate || '',
+          toolsRequired: data.toolsRequired || '',
+          materialsNeeded: data.materialsNeeded || ''
         };
-        ferrulesData.push({
+        modificationsData.push({
           id: doc.id,
           ...migratedData
-        } as FerruleSpec);
+        } as ModificationSpec);
       });
       
-      setSpecs(ferrulesData);
-      setFilteredSpecs(ferrulesData);
+      setSpecs(modificationsData);
+      setFilteredSpecs(modificationsData);
       setDatabaseError(null);
     } catch (error) {
-      console.error('Error fetching ferrules:', error);
-      setDatabaseError('Failed to load ferrules from database.');
+      console.error('Error fetching modifications:', error);
+      setDatabaseError('Failed to load modifications from database.');
     } finally {
       setLoading(false);
     }
@@ -93,12 +89,12 @@ export default function FerrulesPage() {
 
   const handleSave = async () => {
     if (!currentSpec.name.trim()) {
-      alert('Please enter a ferrule name');
+      alert('Please enter a modification name');
       return;
     }
 
     if (!isFirebaseConfigured()) {
-      setDatabaseError('Firebase is not configured. Cannot save ferrules.');
+      setDatabaseError('Firebase is not configured. Cannot save modifications.');
       return;
     }
 
@@ -112,55 +108,55 @@ export default function FerrulesPage() {
       }
       
       if (currentSpec.id) {
-        // Update existing ferrule
-        await updateDoc(doc(db, 'ferrules', currentSpec.id), {
+        // Update existing modification
+        await updateDoc(doc(db, 'modifications', currentSpec.id), {
           name: currentSpec.name,
-          diameter: currentSpec.diameter,
-          length: currentSpec.length,
-          material: currentSpec.material,
+          description: currentSpec.description,
+          category: currentSpec.category,
+          difficulty: currentSpec.difficulty,
           manufacture: currentSpec.manufacture,
           machiningSteps: currentSpec.machiningSteps,
           assemblyNotes: currentSpec.assemblyNotes,
-          vaultPlate: currentSpec.vaultPlate,
-          vaultPlateMaterial: currentSpec.vaultPlateMaterial,
-          vaultPlateThickness: currentSpec.vaultPlateThickness,
+          timeEstimate: currentSpec.timeEstimate,
+          toolsRequired: currentSpec.toolsRequired,
+          materialsNeeded: currentSpec.materialsNeeded,
           updatedAt: Timestamp.now()
         });
       } else {
-        // Add new ferrule
-        await addDoc(collection(db, 'ferrules'), {
+        // Add new modification
+        await addDoc(collection(db, 'modifications'), {
           name: currentSpec.name,
-          diameter: currentSpec.diameter,
-          length: currentSpec.length,
-          material: currentSpec.material,
+          description: currentSpec.description,
+          category: currentSpec.category,
+          difficulty: currentSpec.difficulty,
           manufacture: currentSpec.manufacture,
           machiningSteps: currentSpec.machiningSteps,
           assemblyNotes: currentSpec.assemblyNotes,
-          vaultPlate: currentSpec.vaultPlate,
-          vaultPlateMaterial: currentSpec.vaultPlateMaterial,
-          vaultPlateThickness: currentSpec.vaultPlateThickness,
+          timeEstimate: currentSpec.timeEstimate,
+          toolsRequired: currentSpec.toolsRequired,
+          materialsNeeded: currentSpec.materialsNeeded,
           createdAt: Timestamp.now(),
           updatedAt: Timestamp.now()
         });
       }
       
       handleCancel();
-      await fetchFerrules(); // Refresh the list
+      await fetchModifications(); // Refresh the list
       setDatabaseError(null);
     } catch (error) {
-      console.error('Error saving ferrule:', error);
-      setDatabaseError('Failed to save ferrule to database.');
+      console.error('Error saving modification:', error);
+      setDatabaseError('Failed to save modification to database.');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleEdit = (spec: FerruleSpec) => {
+  const handleEdit = (spec: ModificationSpec) => {
     setCurrentSpec(spec);
     setIsEditing(true);
   };
 
-  const handleDuplicate = (spec: FerruleSpec) => {
+  const handleDuplicate = (spec: ModificationSpec) => {
     setCurrentSpec({
       ...spec,
       id: '', // Clear ID for new record
@@ -170,12 +166,12 @@ export default function FerrulesPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this ferrule?')) {
+    if (!confirm('Are you sure you want to delete this modification?')) {
       return;
     }
 
     if (!isFirebaseConfigured()) {
-      setDatabaseError('Firebase is not configured. Cannot delete ferrules.');
+      setDatabaseError('Firebase is not configured. Cannot delete modifications.');
       return;
     }
 
@@ -186,12 +182,12 @@ export default function FerrulesPage() {
         return;
       }
       
-      await deleteDoc(doc(db, 'ferrules', id));
-      await fetchFerrules(); // Refresh the list
+      await deleteDoc(doc(db, 'modifications', id));
+      await fetchModifications(); // Refresh the list
       setDatabaseError(null);
     } catch (error) {
-      console.error('Error deleting ferrule:', error);
-      setDatabaseError('Failed to delete ferrule from database.');
+      console.error('Error deleting modification:', error);
+      setDatabaseError('Failed to delete modification from database.');
     }
   };
 
@@ -199,15 +195,15 @@ export default function FerrulesPage() {
     setCurrentSpec({
       id: '',
       name: '',
-      diameter: '',
-      length: '',
-      material: '',
+      description: '',
+      category: 'Other',
+      difficulty: 'Easy',
       manufacture: '',
       machiningSteps: [],
       assemblyNotes: '',
-      vaultPlate: false,
-      vaultPlateMaterial: '',
-      vaultPlateThickness: ''
+      timeEstimate: '',
+      toolsRequired: '',
+      materialsNeeded: ''
     });
     setIsEditing(false);
   };
@@ -217,7 +213,7 @@ export default function FerrulesPage() {
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-slate-600 dark:text-slate-400">Loading ferrules...</p>
+          <p className="text-slate-600 dark:text-slate-400">Loading modifications...</p>
         </div>
       </div>
     );
@@ -227,159 +223,168 @@ export default function FerrulesPage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <Link 
-            href="/" 
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 mb-4"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            Back to Pool Cue Components
-          </Link>
-          
-          <div className="flex justify-between items-center">
+          <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Ferrule Documentation</h1>
-              <p className="text-slate-600 dark:text-slate-400 mt-2">Document ferrule specifications, machining steps, and assembly notes</p>
+              <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2">
+                Cue Modifications
+              </h1>
+              <p className="text-slate-600 dark:text-slate-400">
+                Document cue modifications, custom work, and enhancement procedures
+              </p>
             </div>
-            
-            <button
-              onClick={() => setIsEditing(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+            <Link 
+              href="/"
+              className="bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-lg font-medium transition-colors"
             >
-              New Ferrule
-            </button>
+              ← Back to Components
+            </Link>
           </div>
+
+          {databaseError && (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg mb-6">
+              <p className="font-medium">Database Error</p>
+              <p className="text-sm mt-1">{databaseError}</p>
+            </div>
+          )}
+
+          <button
+            onClick={() => setIsEditing(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors shadow-sm"
+          >
+            + Add New Modification
+          </button>
         </div>
 
-        {databaseError && (
-          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-            <p className="text-red-700 dark:text-red-400">{databaseError}</p>
-          </div>
-        )}
-
+        {/* Edit Form */}
         {isEditing && (
-          <div className="mb-8 bg-white dark:bg-slate-800 rounded-lg p-6 border border-slate-200 dark:border-slate-600">
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6 mb-8 border border-slate-200 dark:border-slate-700">
             <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-6">
-              {currentSpec.id ? 'Edit Ferrule' : 'New Ferrule'}
+              {currentSpec.id ? 'Edit Modification' : 'Add New Modification'}
             </h2>
-
+            
             <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} className="space-y-6">
               {/* Basic Information */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    Ferrule Name *
+                    Modification Name *
                   </label>
                   <input
                     type="text"
                     value={currentSpec.name}
                     onChange={(e) => setCurrentSpec({ ...currentSpec, name: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
-                    placeholder="e.g., Standard White Ferrule, Custom Wood Ferrule"
+                    placeholder="e.g., Weight Bolt Addition, Custom Wrap, Tip Replacement"
                     required
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    Manufacture
+                    Manufacturer/Creator
                   </label>
                   <input
                     type="text"
                     value={currentSpec.manufacture}
                     onChange={(e) => setCurrentSpec({ ...currentSpec, manufacture: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
-                    placeholder="e.g., Predator, Kamui, McDermott"
+                    placeholder="e.g., Custom Shop, OEM, DIY"
                   />
                 </div>
               </div>
 
+              {/* Description */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  Description *
+                </label>
+                <textarea
+                  value={currentSpec.description}
+                  onChange={(e) => setCurrentSpec({ ...currentSpec, description: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                  rows={3}
+                  placeholder="Describe the modification, its purpose, and expected outcome..."
+                  required
+                />
+              </div>
+
+              {/* Category and Difficulty */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    Diameter
+                    Category
                   </label>
-                  <input
-                    type="text"
-                    value={currentSpec.diameter}
-                    onChange={(e) => setCurrentSpec({ ...currentSpec, diameter: e.target.value })}
+                  <select
+                    value={currentSpec.category}
+                    onChange={(e) => setCurrentSpec({ ...currentSpec, category: e.target.value as ModificationSpec['category'] })}
                     className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
-                    placeholder="e.g., 0.500, 1/2"
-                  />
+                  >
+                    <option value="Weight">Weight</option>
+                    <option value="Balance">Balance</option>
+                    <option value="Grip">Grip</option>
+                    <option value="Aesthetics">Aesthetics</option>
+                    <option value="Performance">Performance</option>
+                    <option value="Other">Other</option>
+                  </select>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    Length
+                    Difficulty Level
                   </label>
-                  <input
-                    type="text"
-                    value={currentSpec.length}
-                    onChange={(e) => setCurrentSpec({ ...currentSpec, length: e.target.value })}
+                  <select
+                    value={currentSpec.difficulty}
+                    onChange={(e) => setCurrentSpec({ ...currentSpec, difficulty: e.target.value as ModificationSpec['difficulty'] })}
                     className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
-                    placeholder="e.g., 1.000, 1"
-                  />
+                  >
+                    <option value="Easy">Easy</option>
+                    <option value="Moderate">Moderate</option>
+                    <option value="Advanced">Advanced</option>
+                    <option value="Expert">Expert</option>
+                  </select>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    Material
+                    Time Estimate
                   </label>
                   <input
                     type="text"
-                    value={currentSpec.material}
-                    onChange={(e) => setCurrentSpec({ ...currentSpec, material: e.target.value })}
+                    value={currentSpec.timeEstimate || ''}
+                    onChange={(e) => setCurrentSpec({ ...currentSpec, timeEstimate: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
-                    placeholder="e.g., Ivory, Melamine, Wood"
+                    placeholder="e.g., 2-3 hours, 1 day"
                   />
                 </div>
               </div>
 
-              {/* Vault Plate Section */}
-              <div className="bg-slate-50 dark:bg-slate-700/50 p-4 rounded-lg">
-                <div className="flex items-center mb-4">
-                  <input
-                    type="checkbox"
-                    id="vaultPlate"
-                    checked={currentSpec.vaultPlate}
-                    onChange={(e) => setCurrentSpec({ ...currentSpec, vaultPlate: e.target.checked })}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300 rounded"
-                  />
-                  <label htmlFor="vaultPlate" className="ml-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Include Vault Plate
+              {/* Tools and Materials */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    Tools Required
                   </label>
+                  <textarea
+                    value={currentSpec.toolsRequired || ''}
+                    onChange={(e) => setCurrentSpec({ ...currentSpec, toolsRequired: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                    rows={3}
+                    placeholder="List tools needed for this modification..."
+                  />
                 </div>
 
-                {currentSpec.vaultPlate && (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                        Vault Plate Material
-                      </label>
-                      <input
-                        type="text"
-                        value={currentSpec.vaultPlateMaterial || ''}
-                        onChange={(e) => setCurrentSpec({ ...currentSpec, vaultPlateMaterial: e.target.value })}
-                        className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
-                        placeholder="e.g., Brass, Stainless Steel"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                        Vault Plate Thickness
-                      </label>
-                      <input
-                        type="text"
-                        value={currentSpec.vaultPlateThickness || ''}
-                        onChange={(e) => setCurrentSpec({ ...currentSpec, vaultPlateThickness: e.target.value })}
-                        className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
-                        placeholder="e.g., 0.062, 1/16"
-                      />
-                    </div>
-                  </div>
-                )}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    Materials Needed
+                  </label>
+                  <textarea
+                    value={currentSpec.materialsNeeded || ''}
+                    onChange={(e) => setCurrentSpec({ ...currentSpec, materialsNeeded: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                    rows={3}
+                    placeholder="List materials, parts, or supplies needed..."
+                  />
+                </div>
               </div>
 
               {/* Machining Steps and Technical Drawing */}
@@ -388,12 +393,12 @@ export default function FerrulesPage() {
                 <div className="lg:col-span-2">
                   <MachiningStepsEditor
                     spec={currentSpec}
-                    onUpdate={(updatedSpec) => setCurrentSpec(updatedSpec as FerruleSpec)}
+                    onUpdate={(updatedSpec) => setCurrentSpec(updatedSpec as ModificationSpec)}
                   />
                 </div>
                 
                 {/* Technical Drawing - Right Side */}
-                {(currentSpec.machiningSteps.length > 0 || currentSpec.diameter) && (
+                {currentSpec.machiningSteps.length > 0 && (
                   <div className="lg:col-span-1">
                     <TechnicalDrawing spec={currentSpec} />
                   </div>
@@ -403,14 +408,14 @@ export default function FerrulesPage() {
               {/* Assembly Notes */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  Assembly Notes
+                  Procedure Notes
                 </label>
                 <textarea
                   value={currentSpec.assemblyNotes}
                   onChange={(e) => setCurrentSpec({ ...currentSpec, assemblyNotes: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
                   rows={4}
-                  placeholder="Document assembly procedures, special requirements, or notes..."
+                  placeholder="Document step-by-step procedures, special requirements, safety notes, or tips..."
                 />
               </div>
 
@@ -421,7 +426,7 @@ export default function FerrulesPage() {
                   disabled={saving}
                   className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-6 py-2 rounded-lg font-medium transition-colors"
                 >
-                  {saving ? 'Saving...' : (currentSpec.id ? 'Update Ferrule' : 'Save Ferrule')}
+                  {saving ? 'Saving...' : (currentSpec.id ? 'Update Modification' : 'Save Modification')}
                 </button>
                 <button
                   type="button"
@@ -435,23 +440,23 @@ export default function FerrulesPage() {
           </div>
         )}
 
-        {/* Ferrules List */}
+        {/* Modifications List */}
         <div className="space-y-6">
           
           {specs.length === 0 ? (
             <div className="text-center py-12">
               <div className="text-slate-400 dark:text-slate-500 mb-4">
                 <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 011-1h1a2 2 0 100-4H7a1 1 0 01-1-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
                 </svg>
               </div>
-              <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-2">No ferrules documented yet</h3>
-              <p className="text-slate-600 dark:text-slate-400 mb-4">Start by creating your first ferrule specification</p>
+              <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-2">No modifications documented yet</h3>
+              <p className="text-slate-600 dark:text-slate-400 mb-4">Start by creating your first modification specification</p>
               <button
                 onClick={() => setIsEditing(true)}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
               >
-                Create First Ferrule
+                Create First Modification
               </button>
             </div>
           ) : (
@@ -459,7 +464,7 @@ export default function FerrulesPage() {
               <SearchFilter
                 items={specs}
                 onFilteredItems={setFilteredSpecs}
-                placeholder="Search ferrules by name, material, build style, dimensions..."
+                placeholder="Search modifications by name, category, difficulty..."
               />
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {filteredSpecs.map((spec) => (
